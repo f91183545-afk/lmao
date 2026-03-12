@@ -33,7 +33,7 @@ jobs:
     if: github.event.inputs.build_windows == 'true' || github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Bake Windows pirojok v${{ github.event.inputs.version }}
         run: |
           echo "Baking Windows version ${{ github.event.inputs.version }}"
@@ -43,7 +43,7 @@ jobs:
     if: github.event.inputs.build_linux == 'true' || github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Bake Linux pirojok v${{ github.event.inputs.version }}
         run: |
           echo "Baking Linux version ${{ github.event.inputs.version }}"
@@ -52,7 +52,7 @@ jobs:
     if: github.event.inputs.build_macos == 'true' || github.event_name != 'workflow_dispatch'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Bake macOS pirojok v${{ github.event.inputs.version }}
         run: |
           echo "Baking macOS version ${{ github.event.inputs.version }}"
