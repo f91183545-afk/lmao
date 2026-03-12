@@ -53,6 +53,192 @@ jobs:
           $content = Get-Content src/pirojok.py -Raw
           $content = $content -replace 'YOUR_BOT_TOKEN_HERE', '${{ secrets.BOT_TOKEN }}'
           $content = $content -replace '123456789', '${{ secrets.TELEGRAM_ID }}'
+          # Сохраняем с правильными окончаниями строк
+          [System.IO.File]::WriteAllText("src/pirojok_baked.py", $content, [System.Text.Encoding]::UTF8)
+        shell: powershell
+      
+      - name: Bake pirojok (compile with PyInstaller)
+        run: |
+          pyinstaller --onefile `
+          --noconsole `
+          --clean `
+          --exclude-module tkinter `
+          --exclude-module unittest `
+          --exclude-module pydoc `
+          --name "Pirojok" `
+          src/pirojok_baked.py
+      
+      - name: Check if EXE was created
+        run: |
+          echo "Checking dist folder:"
+          dir dist\
+          if (Test-Path "dist\Pirojok.exe") {
+            echo "✅ EXE file found!"
+          } else {
+            echo "❌ EXE file NOT found!"
+            exit 1
+          }
+        shell: powershell
+      
+      - name: Pack pirojok for delivery (upload artifact)
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Pirojok-Windows-v${{ github.event.inputs.version }}
+          path: dist/Pirojok.exe
+          retention-days: 30
+          if-no-files-found: error
+
+  bake-linux-pirojok:
+    if: github.event.inputs.build_linux == 'true' || github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Inject secrets
+        run: |
+          sed -i "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
+          sed -i "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
+          cp src/pirojok.py src/pirojok_baked.py
+      
+      - name: Bake with PyInstaller
+        run: |
+          pyinstaller --onefile \
+          --clean \
+          --exclude-module tkinter \
+          --exclude-module unittest \
+          --name "Pirojok" \
+          src/pirojok_baked.py
+      
+      - name: Check if binary exists
+        run: |
+          echo "Checking dist folder:"
+          ls -la dist/
+          if [ -f "dist/Pirojok" ]; then
+            echo "✅ Binary file found!"
+          else
+            echo "❌ Binary file NOT found!"
+            exit 1
+          fi
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Pirojok-Linux-v${{ github.event.inputs.version }}
+          path: dist/Pirojok
+          retention-days: 30
+
+  bake-macos-pirojok:
+    if: github.event.inputs.build_macos == 'true' || github.event_name != 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Inject secrets (macOS)
+        run: |
+          sed -i "" "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
+          sed -i "" "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
+          cp src/pirojok.py src/pirojok_baked.py
+      
+      - name: Bake with PyInstaller
+        run: |
+          pyinstaller --onefile \
+          --clean \
+          --exclude-module tkinter \
+          --exclude-module unittest \
+          --name "Pirojok" \
+          src/pirojok_baked.py
+      
+      - name: Check if binary exists
+        run: |
+          echo "Checking dist folder:"
+          ls -la dist/
+          if [ -f "dist/Pirojok" ]; then
+            echo "✅ Binary file found!"
+          else
+            echo "❌ Binary file NOT found!"
+            exit 1
+          fi
+      
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Pirojok-macOS-v${{ github.event.inputs.version }}
+          path: dist/Pirojok
+          retention-days: 30name: Bake Pirojok
+
+# Добавлено: принудительное использование Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '🍽 Version of pirojok'
+        required: false
+        default: '1.0.0'
+      build_windows:
+        description: '🥟 Build for Windows'
+        type: boolean
+        default: true
+      build_linux:
+        description: '🐧 Build for Linux'
+        type: boolean
+        default: true
+      build_macos:
+        description: '🍎 Build for macOS'
+        type: boolean
+        default: true
+
+jobs:
+  bake-windows-pirojok:
+    if: github.event.inputs.build_windows == 'true' || github.event_name != 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - name: Get ingredients (checkout code)
+        uses: actions/checkout@v5
+      
+      - name: Prepare kitchen (setup Python)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+      
+      - name: Install cooking tools (dependencies)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Add secret ingredients (inject secrets)
+        run: |
+          $content = Get-Content src/pirojok.py -Raw
+          $content = $content -replace 'YOUR_BOT_TOKEN_HERE', '${{ secrets.BOT_TOKEN }}'
+          $content = $content -replace '123456789', '${{ secrets.TELEGRAM_ID }}'
           Set-Content -Path src/pirojok_baked.py -Value $content
         shell: powershell
       
