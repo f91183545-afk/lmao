@@ -1,4 +1,11 @@
+# Основные зависимости
 requests==2.31.0
 pyautogui==0.9.54
 pillow==10.1.0
-pyinstaller==6.3.0
+psutil==5.9.8
+
+# Для Windows API и маскировки
+pywin32==306
+
+# Для шифрования (опционально)
+pycryptodome==3.20.0
