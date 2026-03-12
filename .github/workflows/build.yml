@@ -1,5 +1,9 @@
 name: Bake Pirojok
 
+# Добавлено: принудительное использование Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 on:
   push:
     branches: [ main, master ]
@@ -89,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       
-      - uses: actions/setup-python@v5.5.0
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       
@@ -125,7 +129,7 @@ jobs:
           fi
       
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: Pirojok-Linux-v${{ github.event.inputs.version }}
           path: dist/Pirojok
@@ -173,7 +177,7 @@ jobs:
           fi
       
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: Pirojok-macOS-v${{ github.event.inputs.version }}
           path: dist/Pirojok
