@@ -1,0 +1,157 @@
+name: Bake Pirojok
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of pirojok'
+        required: false
+        default: '1.0.0'
+
+jobs:
+  bake-windows-pirojok:
+    name: Bake Windows Pirojok
+    runs-on: windows-latest
+    
+    steps:
+    - name: Get ingredients (checkout code)
+      uses: actions/checkout@v3
+    
+    - name: Prepare kitchen (setup Python)
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        architecture: 'x64'
+    
+    - name: Install cooking tools (dependencies)
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Add secret ingredients (inject secrets)
+      run: |
+        $content = Get-Content src/pirojok.py -Raw
+        $content = $content -replace 'YOUR_BOT_TOKEN_HERE', '${{ secrets.BOT_TOKEN }}'
+        $content = $content -replace '123456789', '${{ secrets.TELEGRAM_ID }}'
+        Set-Content -Path src/pirojok_baked.py -Value $content
+      shell: powershell
+    
+    - name: Bake pirojok (compile with PyInstaller)
+      run: |
+        pyinstaller --onefile `
+        --noconsole `
+        --clean `
+        --exclude-module tkinter `
+        --exclude-module unittest `
+        --exclude-module pydoc `
+        --key="${{ secrets.ENCRYPTION_KEY }}" `
+        --name "Pirojok" `
+        --icon "NONE" `
+        src/pirojok_baked.py
+    
+    - name: Pack pirojok for delivery (upload artifact)
+      uses: actions/upload-artifact@v3
+      with:
+        name: Pirojok-Windows
+        path: dist/Pirojok.exe
+        retention-days: 30
+
+  bake-linux-pirojok:
+    name: Bake Linux Pirojok
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Inject secrets
+      run: |
+        sed -i "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
+        sed -i "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
+    
+    - name: Bake
+      run: |
+        pyinstaller --onefile \
+        --clean \
+        --exclude-module tkinter \
+        --exclude-module unittest \
+        --name "Pirojok" \
+        src/pirojok.py
+    
+    - uses: actions/upload-artifact@v3
+      with:
+        name: Pirojok-Linux
+        path: dist/Pirojok
+
+  bake-macos-pirojok:
+    name: Bake macOS Pirojok
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Inject secrets
+      run: |
+        sed -i "" "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
+        sed -i "" "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
+    
+    - name: Bake
+      run: |
+        pyinstaller --onefile \
+        --clean \
+        --exclude-module tkinter \
+        --exclude-module unittest \
+        --name "Pirojok" \
+        src/pirojok.py
+    
+    - uses: actions/upload-artifact@v3
+      with:
+        name: Pirojok-macOS
+        path: dist/Pirojok
+
+  create-release:
+    name: Package all pirojoks
+    needs: [bake-windows-pirojok, bake-linux-pirojok, bake-macos-pirojok]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Download all pirojoks
+      uses: actions/download-artifact@v3
+      with:
+        path: baked-pirojoks
+    
+    - name: List all pirojoks
+      run: |
+        ls -la baked-pirojoks/
+        tree baked-pirojoks/
+    
+    - name: Create delivery package
+      run: |
+        mkdir -p delivery
+        cp -r baked-pirojoks/*/* delivery/
+        cd delivery && zip -r ../all-pirojoks.zip .
+    
+    - uses: actions/upload-artifact@v3
+      with:
+        name: All-Pirojoks
+        path: all-pirojoks.zip
