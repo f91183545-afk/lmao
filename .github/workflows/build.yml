@@ -60,7 +60,6 @@ jobs:
           --exclude-module tkinter `
           --exclude-module unittest `
           --exclude-module pydoc `
-          --key="${{ secrets.ENCRYPTION_KEY }}" `
           --name "Pirojok" `
           src/pirojok_baked.py
       
@@ -79,7 +78,7 @@ jobs:
       - name: Pack pirojok for delivery (upload artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: Pirojok-Windows
+          name: Pirojok-Windows-v${{ github.event.inputs.version }}
           path: dist/Pirojok.exe
           retention-days: 30
           if-no-files-found: error
@@ -89,6 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
@@ -110,7 +110,6 @@ jobs:
           --clean \
           --exclude-module tkinter \
           --exclude-module unittest \
-          --key="${{ secrets.ENCRYPTION_KEY }}" \
           --name "Pirojok" \
           src/pirojok.py
       
@@ -128,7 +127,7 @@ jobs:
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Pirojok-Linux
+          name: Pirojok-Linux-v${{ github.event.inputs.version }}
           path: dist/Pirojok
           retention-days: 30
 
@@ -137,6 +136,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
@@ -147,7 +147,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
-      - name: Inject secrets
+      - name: Inject secrets (macOS)
         run: |
           sed -i "" "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
           sed -i "" "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
@@ -158,7 +158,6 @@ jobs:
           --clean \
           --exclude-module tkinter \
           --exclude-module unittest \
-          --key="${{ secrets.ENCRYPTION_KEY }}" \
           --name "Pirojok" \
           src/pirojok.py
       
@@ -176,6 +175,6 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Pirojok-macOS
+          name: Pirojok-macOS-v${{ github.event.inputs.version }}
           path: dist/Pirojok
           retention-days: 30
