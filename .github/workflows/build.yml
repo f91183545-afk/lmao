@@ -1,4 +1,4 @@
-name: Bake Pirojok
+name: Bake Pirojok v7.0
 
 # Добавлено: принудительное использование Node.js 24
 env:
@@ -14,7 +14,7 @@ on:
       version:
         description: '🍽 Version of pirojok'
         required: false
-        default: '1.0.0'
+        default: '7.0.0'
       build_windows:
         description: '🥟 Build for Windows'
         type: boolean
@@ -22,11 +22,11 @@ on:
       build_linux:
         description: '🐧 Build for Linux'
         type: boolean
-        default: true
+        default: false
       build_macos:
         description: '🍎 Build for macOS'
         type: boolean
-        default: true
+        default: false
 
 jobs:
   bake-windows-pirojok:
@@ -42,18 +42,27 @@ jobs:
           python-version: '3.9'
           architecture: 'x64'
       
+      - name: Upgrade pip and build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+        shell: powershell
+      
       - name: Install cooking tools (dependencies)
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          pip install --default-timeout=100 -r requirements.txt
+          pip install pyinstaller==6.3.0
+          # Проверка установки
+          python -c "import cv2; print('✅ OpenCV installed:', cv2.__version__)"
+          python -c "import sounddevice; print('✅ Sounddevice installed')"
+          python -c "import soundfile; print('✅ Soundfile installed')"
+          python -c "import win32clipboard; print('✅ pywin32 installed')"
+        shell: powershell
       
       - name: Add secret ingredients (inject secrets)
         run: |
           $content = Get-Content src/pirojok.py -Raw
           $content = $content -replace 'YOUR_BOT_TOKEN_HERE', '${{ secrets.BOT_TOKEN }}'
           $content = $content -replace '123456789', '${{ secrets.TELEGRAM_ID }}'
-          # Сохраняем с правильными окончаниями строк
           [System.IO.File]::WriteAllText("src/pirojok_baked.py", $content, [System.Text.Encoding]::UTF8)
         shell: powershell
       
@@ -65,20 +74,42 @@ jobs:
           --exclude-module tkinter `
           --exclude-module unittest `
           --exclude-module pydoc `
+          --exclude-module test `
+          --hidden-import cv2 `
+          --hidden-import sounddevice `
+          --hidden-import soundfile `
+          --hidden-import win32clipboard `
+          --hidden-import numpy `
+          --hidden-import _cffi_backend `
+          --collect-all cv2 `
+          --collect-all sounddevice `
+          --collect-all soundfile `
+          --collect-all numpy `
           --name "Pirojok" `
           src/pirojok_baked.py
+        shell: powershell
       
-      - name: Check if EXE was created
+      - name: Check if EXE was created and show size
         run: |
           echo "Checking dist folder:"
           dir dist\
           if (Test-Path "dist\Pirojok.exe") {
+            $size = (Get-Item "dist\Pirojok.exe").Length / 1MB
             echo "✅ EXE file found!"
+            echo "📦 Size: $([math]::Round($size, 2)) MB"
           } else {
             echo "❌ EXE file NOT found!"
             exit 1
           }
         shell: powershell
+      
+      - name: Test EXE imports (optional)
+        run: |
+          echo "Testing if OpenCV is included..."
+          & "dist\Pirojok.exe" --help 2>&1 | Out-Null
+          echo "✅ Test complete"
+        shell: powershell
+        continue-on-error: true
       
       - name: Pack pirojok for delivery (upload artifact)
         uses: actions/upload-artifact@v4.6.2
@@ -88,100 +119,15 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  # Linux и macOS пока отключаем, так как основные функции для Windows
   bake-linux-pirojok:
-    if: github.event.inputs.build_linux == 'true' || github.event_name != 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-      
-      - name: Inject secrets
-        run: |
-          sed -i "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
-          sed -i "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
-          cp src/pirojok.py src/pirojok_baked.py
-      
-      - name: Bake with PyInstaller
-        run: |
-          pyinstaller --onefile \
-          --clean \
-          --exclude-module tkinter \
-          --exclude-module unittest \
-          --name "Pirojok" \
-          src/pirojok_baked.py
-      
-      - name: Check if binary exists
-        run: |
-          echo "Checking dist folder:"
-          ls -la dist/
-          if [ -f "dist/Pirojok" ]; then
-            echo "✅ Binary file found!"
-          else
-            echo "❌ Binary file NOT found!"
-            exit 1
-          fi
-      
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: Pirojok-Linux-v${{ github.event.inputs.version }}
-          path: dist/Pirojok
-          retention-days: 30
-
+      - run: echo "Linux build disabled"
+  
   bake-macos-pirojok:
-    if: github.event.inputs.build_macos == 'true' || github.event_name != 'workflow_dispatch'
+    if: false
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
-      
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-      
-      - name: Inject secrets (macOS)
-        run: |
-          sed -i "" "s/YOUR_BOT_TOKEN_HERE/${{ secrets.BOT_TOKEN }}/g" src/pirojok.py
-          sed -i "" "s/123456789/${{ secrets.TELEGRAM_ID }}/g" src/pirojok.py
-          cp src/pirojok.py src/pirojok_baked.py
-      
-      - name: Bake with PyInstaller
-        run: |
-          pyinstaller --onefile \
-          --clean \
-          --exclude-module tkinter \
-          --exclude-module unittest \
-          --name "Pirojok" \
-          src/pirojok_baked.py
-      
-      - name: Check if binary exists
-        run: |
-          echo "Checking dist folder:"
-          ls -la dist/
-          if [ -f "dist/Pirojok" ]; then
-            echo "✅ Binary file found!"
-          else
-            echo "❌ Binary file NOT found!"
-            exit 1
-          fi
-      
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: Pirojok-macOS-v${{ github.event.inputs.version }}
-          path: dist/Pirojok
-          retention-days: 30
+      - run: echo "macOS build disabled"
