@@ -12,19 +12,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '🍽 Version of pirojok'
+        description: 'Version of pirojok'
         required: false
         default: '7.0.0'
       build_windows:
-        description: '🥟 Build for Windows'
+        description: 'Build for Windows'
         type: boolean
         default: true
       build_linux:
-        description: '🐧 Build for Linux'
+        description: 'Build for Linux'
         type: boolean
         default: false
       build_macos:
-        description: '🍎 Build for macOS'
+        description: 'Build for macOS'
         type: boolean
         default: false
 
@@ -52,10 +52,10 @@ jobs:
           pip install --default-timeout=100 -r requirements.txt
           pip install pyinstaller==6.3.0
           # Проверка установки
-          python -c "import cv2; print('✅ OpenCV installed:', cv2.__version__)"
-          python -c "import sounddevice; print('✅ Sounddevice installed')"
-          python -c "import soundfile; print('✅ Soundfile installed')"
-          python -c "import win32clipboard; print('✅ pywin32 installed')"
+          python -c "import cv2; print('OpenCV installed:', cv2.__version__)"
+          python -c "import sounddevice; print('Sounddevice installed')"
+          python -c "import soundfile; print('Soundfile installed')"
+          python -c "import win32clipboard; print('pywin32 installed')"
         shell: powershell
       
       - name: Add secret ingredients (inject secrets)
@@ -95,10 +95,10 @@ jobs:
           dir dist\
           if (Test-Path "dist\Pirojok.exe") {
             $size = (Get-Item "dist\Pirojok.exe").Length / 1MB
-            echo "✅ EXE file found!"
-            echo "📦 Size: $([math]::Round($size, 2)) MB"
+            Write-Host "OK EXE file found!"
+            Write-Host "Size: $([math]::Round($size, 2)) MB"
           } else {
-            echo "❌ EXE file NOT found!"
+            Write-Host "ERROR EXE file NOT found!"
             exit 1
           }
         shell: powershell
@@ -107,7 +107,7 @@ jobs:
         run: |
           echo "Testing if OpenCV is included..."
           & "dist\Pirojok.exe" --help 2>&1 | Out-Null
-          echo "✅ Test complete"
+          echo "Test complete"
         shell: powershell
         continue-on-error: true
       
